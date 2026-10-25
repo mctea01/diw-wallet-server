@@ -1,4 +1,3 @@
-# Draft of .github/workflows/ci.yml (agents cannot push workflow files; paste it into the repository).
 # Tests every push to main and every pull request; a v* tag also publishes the container image to GHCR and
 # attaches the distribution tarball to a GitHub release.
 name: ci
@@ -30,8 +29,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      # The wallet's core module is a Kotlin Multiplatform library with an Android target.
-      - uses: android-actions/setup-android@v3
+      # The wallet's core module has an Android target; the runner image's preinstalled SDK (ANDROID_HOME) is enough.
+      # android-actions/setup-android@v3 fails with cmdline-tools 16.0, which no longer has the "tools" package.
       - uses: gradle/actions/setup-gradle@v4
       - name: Test and build the distribution
         run: ./gradlew test installDist distTar
