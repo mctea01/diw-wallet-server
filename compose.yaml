@@ -7,6 +7,8 @@ services:
     environment:
       DIW_PUBLIC_URL: https://${DIW_DOMAIN:?set DIW_DOMAIN in .env}
       DIW_FEATURES: ${DIW_FEATURES:-relay}
+      # Needed when DIW_FEATURES has zktls: SHA-256 of the access token (docker compose run --rm server hash-token).
+      DIW_ZKTLS_TOKEN_SHA256: ${DIW_ZKTLS_TOKEN_SHA256:-}
       # The port is reachable only from Caddy on this network, so its forwarded client address is trusted.
       DIW_TRUST_FORWARDED: "true"
       JAVA_OPTS: ${DIW_JAVA_OPTS:--Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m}

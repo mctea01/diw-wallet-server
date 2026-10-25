@@ -7,7 +7,10 @@ import diw.wallet.core.trust.TrustRegistry
 import diw.wallet.core.profile.twdiw.TwdiwTrustList
 import diw.wallet.core.trust.DidTrust
 import diw.wallet.core.zk.OpenAcAgeVerifier
+import diw.wallet.core.trust.BuiltInAnchors
 import diw.wallet.core.zk.ZkBackend
+import diw.wallet.core.zk.ZkTemplatePack
+import org.multipaz.crypto.EcPublicKey
 import diw.wallet.core.zk.ZkResult
 import diw.wallet.core.zk.native.FileZkAssetStore
 import diw.wallet.core.zk.native.OpenAcAgeNativeVerifier
@@ -55,6 +58,12 @@ class Server(
     /** Replaces the TWDIW trust list and the status list check (tests). */
     didTrust: DidTrust? = null,
     checkStatus: Boolean = true,
+    /** Server roots TLSNotary also accepts (tests add their target's CA). */
+    private val zkTlsRoots: List<ByteArray> = emptyList(),
+    /** Keys a template pack may be signed with; the project's release key unless a test signs its own pack. */
+    templateKeys: List<EcPublicKey>? = null,
+    /** Pretends the native library has TLSNotary (tests without it). */
+    zkTlsAvailable: Boolean? = null,
 ) {
     private val http by lazy { HttpClient(Java) }
     private val didTrust: DidTrust by lazy { didTrust ?: DidTrust(listOf(TwdiwTrustList(http))) }
@@ -75,9 +84,29 @@ class Server(
     val bondsAge: BondsAge? = if (ServerConfig.FEATURE_BONDS_AGE !in config.features) null else
         BondsAge(config.publicUrl, config.bondsAge, DidResolver(http), this.didTrust) { nativeAgeVerifier }
 
+    /** The key that signs zkTLS requests and receipts; only the zktls feature needs it. */
+    val signing: SigningIdentity? = if (ServerConfig.FEATURE_ZKTLS !in config.features) null else runBlocking {
+        SigningIdentity.load(config.signingKeyFile ?: File(config.dataDir, "signing.pem"), config.publicUrl, config.signingGenerate, config.signingKeyPem)
+    }
+
+    val templates: ZkTemplates? = if (signing == null) null else
+        ZkTemplates(http, config.dataDir, config.zkTlsTemplatesFile, templateKeys ?: ZkTemplatePack.trustedKeys())
+
+    private val tlsn = zkTlsAvailable ?: (ZkBackend.TLSN in native)
+
+    val zkTls: ZkTlsHost? = signing?.let { id ->
+        ZkTlsHost(config.publicUrl, id, config.zkTls, { BuiltInAnchors.all.map { it.certificate.encoded.toByteArray() }.distinct() + zkTlsRoots }) { tlsn }
+    }
+
+    /** Whether every enabled feature can run: zktls needs TLSNotary in the native library. */
+    val healthy: Boolean get() = zkTls == null || tlsn
+
     val verifier: TwdiwVerifier? = if (ServerConfig.FEATURE_VERIFIER !in config.features) null else TwdiwVerifier(
         config.publicUrl, config.verifier, config.verifierName,
-        runBlocking { TwdiwVerifier.Identity.load(config.verifierKeyDir ?: File(config.dataDir, "verifier")) },
+        runBlocking {
+            config.verifierKeyPem?.let { TwdiwVerifier.Identity.parse(it) }
+                ?: TwdiwVerifier.Identity.load(config.verifierKeyDir ?: File(config.dataDir, "verifier"))
+        },
         DidResolver(http), this.didTrust,
         if (checkStatus) W3cStatusChecker(http, TrustRegistry(EphemeralStorage(), EnvironmentPolicy()), this.didTrust) else null,
     )
@@ -87,6 +116,9 @@ class Server(
      * and then verifies here; until then, or without the native library, the age verifier only relays.
      */
     fun prepare(scope: CoroutineScope) {
+        templates?.start(scope)
+        zkTls?.start(scope)
+        if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
         if (bondsAge == null || !config.bondsAgeVerify || nativeAgeVerifier != null) return
         if (ZkBackend.OPENAC_SPARTAN2 !in native) {
             log.warn("bonds_age_verify is set but the native library has no OpenAC backend; relaying only")
@@ -116,7 +148,10 @@ fun Application.module(server: Server) {
         timeout = 60.seconds
     }
     routing {
-        get("/healthz") { call.respondText("ok", ContentType.Text.Plain, HttpStatusCode.OK) }
+        get("/healthz") {
+            if (server.healthy) call.respondText("ok", ContentType.Text.Plain, HttpStatusCode.OK)
+            else call.respondText("native library without TLSNotary", ContentType.Text.Plain, HttpStatusCode.ServiceUnavailable)
+        }
         get("/info") {
             val body = buildJsonObject {
                 put("name", "diw-wallet-server")
@@ -125,16 +160,71 @@ fun Application.module(server: Server) {
                 putJsonArray("native") { server.nativeBackends.forEach { add(JsonPrimitive(it)) } }
                 // The web verifier's DID, for registering it or recognising it on the holder's consent screen.
                 server.verifier?.let { put("verifierDid", it.did) }
+                // The root the wallet trusts after the user compares its SHA-256 (DESIGN 3.4).
+                server.signing?.let { id ->
+                    put("signing", buildJsonObject {
+                        put("subject", id.root.subject.name)
+                        put("rootSha256", id.rootSha256)
+                        put("root", id.root.toPem())
+                    })
+                }
+                server.templates?.version?.let { put("templatesVersion", it) }
             }
             call.respondText(body.toString(), ContentType.Application.Json)
         }
         server.relay?.let { relayRoutes(it) }
         server.bondsAge?.let { bondsAgeRoutes(it, server.config.bondsAge) }
         server.verifier?.let { verifierRoutes(it, server.config.verifierAccessToken) }
+        server.zkTls?.let { zkTlsRoutes(it, server.config.zkTlsTokenHashes) }
     }
 }
 
-fun main() {
+/**
+ * `keygen <file> <public_url>` writes a signing file, or with `verifier` the web verifier's key, for a platform
+ * secret (signing_key_pem, verifier_key_pem); `hash-token` prints the SHA-256 of stdin's first line.
+ */
+private fun command(args: Array<String>): Boolean {
+    when (args.firstOrNull()) {
+        null -> return false
+        "keygen" -> {
+            val file = args.getOrNull(1)?.let { File(it) }
+            val url = args.getOrNull(2)
+            if (file == null || url == null) {
+                System.err.println("usage: diw-server keygen <file> <public_url> [verifier]")
+                exitProcess(2)
+            }
+            if (file.exists()) {
+                System.err.println("diw-server: ${file.path} exists; remove it first")
+                exitProcess(2)
+            }
+            if (args.getOrNull(3) == "verifier") {
+                val identity = runBlocking { TwdiwVerifier.Identity.create() }
+                writePrivateFile(file, TwdiwVerifier.Identity.pem(identity))
+                println("Wrote ${file.path}; verifier DID ${identity.did}")
+            } else {
+                val identity = runBlocking { SigningIdentity.create(url) }
+                SigningIdentity.write(file, identity)
+                println("Wrote ${file.path}; root SHA-256 ${identity.rootSha256}")
+            }
+        }
+        "hash-token" -> {
+            val token = readlnOrNull()?.trim().orEmpty()
+            if (token.length < 16) {
+                System.err.println("diw-server: use a token of at least 16 characters")
+                exitProcess(2)
+            }
+            println(SigningIdentity.sha256Hex(token.encodeToByteArray()))
+        }
+        else -> {
+            System.err.println("usage: diw-server [keygen <file> <public_url> [verifier] | hash-token]")
+            exitProcess(2)
+        }
+    }
+    return true
+}
+
+fun main(args: Array<String>) {
+    if (command(args)) return
     val config = try {
         ServerConfig.load()
     } catch (e: IllegalArgumentException) {

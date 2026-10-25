@@ -37,6 +37,19 @@ data class ServerConfig(
     val verifierAccessToken: String? = null,
     /** Where the verifier's signing key is kept; its DID changes when the key does. */
     val verifierKeyDir: File? = null,
+    val zkTls: ZkTlsLimits = ZkTlsLimits(),
+    /** SHA-256 of the tokens that may create zkTLS sessions; required with the zktls feature. */
+    val zkTlsTokenHashes: List<ByteArray> = emptyList(),
+    /** A local template pack to offer instead of the project's release (for an offline host). */
+    val zkTlsTemplatesFile: File? = null,
+    /** The PEM file holding the key that signs zkTLS requests and receipts, and its chain; null keeps it in the data directory. */
+    val signingKeyFile: File? = null,
+    /** Make a signing key when [signingKeyFile] is missing; off when the key comes from a mounted secret. */
+    val signingGenerate: Boolean = true,
+    /** The signing file's contents, from a platform secret in DIW_SIGNING_KEY_PEM; wins over [signingKeyFile]. */
+    val signingKeyPem: String? = null,
+    /** The web verifier's key (private then public PEM), from a platform secret; wins over [verifierKeyDir]. */
+    val verifierKeyPem: String? = null,
     /**
      * Take the client address from the reverse proxy's forwarded headers. Defaults to on only when listening on the
      * loopback interface; a container sets it explicitly because its port is reachable only from the proxy.
@@ -47,14 +60,18 @@ data class ServerConfig(
         const val FEATURE_RELAY = "relay"
         const val FEATURE_BONDS_AGE = "bonds-age"
         const val FEATURE_VERIFIER = "verifier"
-        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER)
+        const val FEATURE_ZKTLS = "zktls"
+        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER, FEATURE_ZKTLS)
         const val DEFAULT_FILE = "/etc/diw-server/server.conf"
         val KEYS = setOf(
             "public_url", "listen_host", "listen_port", "features", "data_dir", "trust_forwarded",
             "relay_max_rooms", "relay_lifetime_minutes", "relay_max_mb", "relay_max_frame_kb", "relay_per_address",
             "bonds_age_max_sessions", "bonds_age_per_address", "bonds_age_verify",
             "verifier_name", "verifier_access_token", "verifier_key_dir", "verifier_max_sessions", "verifier_per_address",
+            "zktls_token_sha256", "zktls_max_sessions", "zktls_per_address", "zktls_concurrent", "zktls_templates_file",
+            "signing_key_file", "signing_generate", "signing_key_pem", "verifier_key_pem",
         )
+        private val HEX64 = Regex("^[0-9a-fA-F]{64}$")
 
         fun load(env: Map<String, String> = System.getenv()): ServerConfig {
             val named = env["DIW_CONFIG"]?.takeIf { it.isNotBlank() }
@@ -99,6 +116,13 @@ data class ServerConfig(
                 "false" -> false
                 else -> throw IllegalArgumentException("$key must be true or false")
             }
+            val tokenHashes = values["zktls_token_sha256"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty().map { h ->
+                require(HEX64.matches(h)) { "zktls_token_sha256 must list SHA-256 hashes in hex (64 characters each)" }
+                h.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            }
+            require(FEATURE_ZKTLS !in features || tokenHashes.isNotEmpty()) {
+                "The zktls feature needs zktls_token_sha256 (diw-server hash-token prints it)"
+            }
             val trustForwarded = bool("trust_forwarded", listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost")
             return ServerConfig(
                 publicUrl = publicUrl,
@@ -128,6 +152,18 @@ data class ServerConfig(
                     require(it.length >= 8) { "verifier_access_token must be at least 8 characters" }
                 },
                 verifierKeyDir = values["verifier_key_dir"]?.takeIf { it.isNotBlank() }?.let { File(it) },
+                zkTls = ZkTlsLimits(
+                    maxSessions = int("zktls_max_sessions", 16, 1..1000),
+                    perAddress = int("zktls_per_address", 4, 1..1000),
+                    concurrent = int("zktls_concurrent", 1, 1..16),
+                ),
+                zkTlsTokenHashes = tokenHashes,
+                zkTlsTemplatesFile = values["zktls_templates_file"]?.takeIf { it.isNotBlank() }?.let { File(it) },
+                signingKeyFile = values["signing_key_file"]?.takeIf { it.isNotBlank() }?.let { File(it) },
+                signingGenerate = bool("signing_generate", true),
+                // A PEM pasted on one line keeps its line breaks as \n.
+                signingKeyPem = values["signing_key_pem"]?.takeIf { it.isNotBlank() }?.replace("\\n", "\n"),
+                verifierKeyPem = values["verifier_key_pem"]?.takeIf { it.isNotBlank() }?.replace("\\n", "\n"),
             )
         }
     }

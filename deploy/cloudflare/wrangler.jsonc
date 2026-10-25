@@ -1,0 +1,36 @@
+// Cloudflare Containers deployment (Workers Paid plan). See README "Cloudflare Containers".
+// The Worker forwards every request to one named container instance: relay rooms and zkTLS sessions live in that
+// instance's memory, so both parties must reach the same one.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "diw-wallet-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "DiwServer",
+      // Built from Dockerfile here, which only re-tags the released image; wrangler pushes it to Cloudflare's registry.
+      "image": "./Dockerfile",
+      // standard-1: 4 GiB, 1/2 vCPU. TLSNotary verification is CPU bound; "basic" (1 GiB, 1/4 vCPU) is enough for
+      // the relay alone.
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "DIW_SERVER", "class_name": "DiwServer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DiwServer"] }],
+  "vars": {
+    // The public address the wallet uses: the workers.dev address or a custom domain routed to this Worker.
+    "PUBLIC_URL": "https://diw-wallet-server.example.workers.dev",
+    "FEATURES": "relay,zktls,bonds-age",
+    // SHA-256 of the zkTLS access token (diw-server hash-token prints it); empty only when zktls is not in FEATURES.
+    "ZKTLS_TOKEN_SHA256": "",
+    // How long an idle instance keeps running; a relay room or zkTLS session never outlives 15 minutes.
+    "SLEEP_AFTER": "20m"
+  }
+  // Secrets (wrangler secret put NAME < file): SIGNING_KEY_PEM (zktls), VERIFIER_KEY_PEM (verifier),
+  // VERIFIER_ACCESS_TOKEN (verifier, optional).
+}
