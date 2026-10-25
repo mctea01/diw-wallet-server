@@ -6,6 +6,7 @@
 
 - **中繼**（`/zktls/relay/{room}`）：讓不在同一網路的兩個裝置連線。只轉送端對端加密的資料，不儲存任何內容。
 - **Bonds 年齡查驗主機**（`/api/zkp/*`，可選，`features` 加 `bonds-age`）：與 Bonds 查驗網站相同的 API。預設只轉送證明包，由查驗方的手機驗證；設 `bonds_age_verify=true` 時改在主機驗證（需較大記憶體，不適合 1 GB 主機）。
+- **網頁查驗端**（`/verify`，可選，`features` 加 `verifier`）：查驗方在網頁輸入卡片類型與欄位，持卡人以政府數位憑證皮夾掃描 QR Code 出示，頁面顯示判定與要求的欄位；也可查驗 Bonds 的自然人憑證自發卡。可設 `verifier_access_token` 限制只有知道存取碼的人能建立查驗。
 - **健康檢查**（`/healthz`）與**版本資訊**（`/info`）。
 
 zkTLS 查驗主機與網頁證明回執（S2）、zkPDF 證明器（S4）尚未實作。

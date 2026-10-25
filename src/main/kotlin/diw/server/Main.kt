@@ -1,6 +1,9 @@
 package diw.server
 
 import diw.wallet.core.did.DidResolver
+import diw.wallet.core.env.EnvironmentPolicy
+import diw.wallet.core.status.W3cStatusChecker
+import diw.wallet.core.trust.TrustRegistry
 import diw.wallet.core.profile.twdiw.TwdiwTrustList
 import diw.wallet.core.trust.DidTrust
 import diw.wallet.core.zk.OpenAcAgeVerifier
@@ -31,6 +34,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.multipaz.storage.ephemeral.EphemeralStorage
 import kotlinx.serialization.json.putJsonArray
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -47,8 +52,12 @@ class Server(
     val config: ServerConfig,
     /** Replaces the native Bonds age verifier (tests). */
     ageVerifier: OpenAcAgeVerifier? = null,
+    /** Replaces the TWDIW trust list and the status list check (tests). */
+    didTrust: DidTrust? = null,
+    checkStatus: Boolean = true,
 ) {
     private val http by lazy { HttpClient(Java) }
+    private val didTrust: DidTrust by lazy { didTrust ?: DidTrust(listOf(TwdiwTrustList(http))) }
 
     val relay: Relay? = if (ServerConfig.FEATURE_RELAY in config.features) Relay(config.relay) else null
 
@@ -64,7 +73,14 @@ class Server(
     @Volatile private var nativeAgeVerifier: OpenAcAgeVerifier? = ageVerifier
 
     val bondsAge: BondsAge? = if (ServerConfig.FEATURE_BONDS_AGE !in config.features) null else
-        BondsAge(config.publicUrl, config.bondsAge, DidResolver(http), DidTrust(listOf(TwdiwTrustList(http)))) { nativeAgeVerifier }
+        BondsAge(config.publicUrl, config.bondsAge, DidResolver(http), this.didTrust) { nativeAgeVerifier }
+
+    val verifier: TwdiwVerifier? = if (ServerConfig.FEATURE_VERIFIER !in config.features) null else TwdiwVerifier(
+        config.publicUrl, config.verifier, config.verifierName,
+        runBlocking { TwdiwVerifier.Identity.load(config.verifierKeyDir ?: File(config.dataDir, "verifier")) },
+        DidResolver(http), this.didTrust,
+        if (checkStatus) W3cStatusChecker(http, TrustRegistry(EphemeralStorage(), EnvironmentPolicy()), this.didTrust) else null,
+    )
 
     /**
      * With bonds_age_verify, installs the OpenAC verifying keys under the data directory (pinned hashes, fetched once)
@@ -107,11 +123,14 @@ fun Application.module(server: Server) {
                 put("version", serverVersion)
                 putJsonArray("features") { server.config.features.sorted().forEach { add(JsonPrimitive(it)) } }
                 putJsonArray("native") { server.nativeBackends.forEach { add(JsonPrimitive(it)) } }
+                // The web verifier's DID, for registering it or recognising it on the holder's consent screen.
+                server.verifier?.let { put("verifierDid", it.did) }
             }
             call.respondText(body.toString(), ContentType.Application.Json)
         }
         server.relay?.let { relayRoutes(it) }
         server.bondsAge?.let { bondsAgeRoutes(it, server.config.bondsAge) }
+        server.verifier?.let { verifierRoutes(it, server.config.verifierAccessToken) }
     }
 }
 
