@@ -1,6 +1,6 @@
 # DIW 正式服務端設計（diw-wallet-server）
 
-狀態：S1 至 S3 已實作（中繼、zkTLS 查驗主機與回執、存取權杖、金鑰管理、附執行環境的發行檔、容器、systemd、Cloud Run、Cloudflare Containers），Bonds 年齡查驗主機與網頁查驗端已實作（可選功能）；S3 的實機部署驗收待使用者執行。S4（zkPDF 證明器）與 TWFIDO SP 為設計。
+狀態：S1 至 S3 已實作（中繼、zkTLS 查驗主機與回執、存取權杖、金鑰管理、附執行環境的發行檔、容器、systemd、Cloud Run、Cloudflare Containers），Bonds 年齡查驗主機、網頁查驗端與行動自然人憑證簽署（TWFIDO SP）已實作（可選功能）；S3 的實機部署驗收待使用者執行。S4（zkPDF 證明器）為設計。
 
 ## 1. 目的與範圍
 
@@ -16,6 +16,7 @@
 | zkPDF 證明器 | v2 | p4-zkp.md 第 8 節「送到自架主機產生」；主機會看到整份文件 | 不可，需數 GB 記憶體 |
 | 網頁查驗端 | v1（可選） | `/verify` 網頁與 `/api/oidvp/*`，以官方查驗端的方言向政府數位憑證皮夾請求卡片，也可查驗 Bonds 自然人憑證自發卡 | 可 |
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
+| 行動自然人憑證簽署 | v1（可選） | `/twfido/sign`，以服務端的 SP 帳號向內政部要求簽署，SP 金鑰不放進 App | 可 |
 
 ## 2. 技術選擇
 
@@ -105,6 +106,22 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 查驗端身分：P-256 金鑰與其 did:key（jwk_jcs-pub），第一次啟動時產生在 `verifier_key_dir`（預設資料目錄下的 `verifier/`，權限 0600），之後沿用；`/info` 的 `verifierDid` 列出 DID。開源版官方皮夾查不到未註冊的 DID 時仍可繼續（推論新版也是如此，未實測）；要在同意畫面顯示機關名稱需向數位發展部註冊這個 DID。
 - 結果只存在記憶體，請求到期後再保留 5 分鐘供頁面讀取，不寫入 log。
 
+### 3.7 行動自然人憑證簽署（`twfido`）
+
+2026-10-25 使用者要求：SP 服務代碼與 AES 金鑰只放在服務端，避免隨 App 發佈而外洩；錢包可選用服務端、編譯時設定的 SP 或開發者手動設定。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| POST | `/twfido/sign` | 需 `Authorization: Bearer <權杖>`；JSON `{mode, idNumber, hint, data, timeLimit}`，回 `{sessionId, token, spTicket, environment, expiresAt}` |
+| GET | `/twfido/sign/{sessionId}?token=` | `{status: pending\|done\|failed, signature, certificate, hashedIdNumber, code, reason}` |
+
+- `mode`：`push`（推播到持有人手機上的行動自然人憑證 App）或 `app2app`（錢包以 `spTicket` 開啟官方 App；票證不含金鑰）。`data` 為 base64 的待簽位元組（CMS 時為含文件雜湊的簽署屬性，上限 8 KB，不含文件），`hint` 為顯示在官方 App 的提示（1 到 60 字），`timeLimit` 為 30 到 600 秒（預設 180）。
+- 沿用錢包 `core` 的 `TwFidoClient`：向內政部要求簽署、輪詢結果，並以 SP 金鑰驗證回應的 `idp_checksum`；檢查失敗時回 `failed`。不論錢包多常輪詢，服務端最多每 3 秒問一次內政部。
+- 簽章值與憑證由錢包自行驗證（簽章對應憑證、憑證連到 MOICA），服務端不參與信任判定。
+- 限制：建立需存取權杖（只存 SHA-256），避免被用來對任意身分證號推播；同時請求 16、每個位址 4、每個身分證號 2（以雜湊計，不保存號碼）。
+- 隱私：服務端看得到身分證號、提示與待簽位元組；三者與結果只在記憶體，到期後 2 分鐘刪除，不寫入 log，回應也不回傳身分證號。
+- 環境：`twfido_environment` 為 `production`（預設）或 `uat`；兩者都需內政部核發的 SP 帳號。`/info` 的 `twfido.environment` 列出目前的環境。
+
 ## 4. 金鑰與信任
 
 - 簽章金鑰：P-256，用來簽查驗請求（`x5c`）與網頁證明回執。憑證鏈為自簽根加葉憑證（葉憑證的 dNSName 為 `public_url` 的主機），效期 20 年；整份存成一個 PEM（私鑰後接葉憑證與根）。
@@ -153,7 +170,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 - 用同一個映像。`deploy/cloudflare/` 的 Worker 把每個請求轉到名為 `main` 的單一容器執行個體（Durable Object 加 `@cloudflare/containers`，`max_instances` 為 1），WebSocket 直接轉送。
 - Worker 以 `CF-Connecting-IP` 覆寫 `X-Forwarded-For`（不附加，避免用戶端自選位址），容器設 `trust_forwarded=true`。
-- 磁碟不保存：金鑰由 secret 傳入（`SIGNING_KEY_PEM`、`VERIFIER_KEY_PEM`、`VERIFIER_ACCESS_TOKEN`），`signing_generate=false`；版型包每次冷啟動重新下載。
+- 磁碟不保存：金鑰由 secret 傳入（`SIGNING_KEY_PEM`、`VERIFIER_KEY_PEM`、`VERIFIER_ACCESS_TOKEN`、`TWFIDO_AES_KEY`），`signing_generate=false`；版型包每次冷啟動重新下載。
 - 執行個體類型預設 `standard-1`（4 GiB、1/2 vCPU），只開中繼可用 `basic`。閒置 `SLEEP_AFTER`（預設 20 分鐘）後休眠。
 - 費用：Workers Paid 每月 5 美元，含 25 GiB-小時記憶體與 375 vCPU-分鐘，休眠時不計。
 - 純 Workers（不用容器）不能執行 JVM 與原生程式庫；以 Durable Object 重寫中繼的方案已放棄（2026-10-25 使用者決定）。
@@ -167,7 +184,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | `public_url` | 必填 | 對外網址，例如 `https://diw.example.org` |
 | `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0`；未指定連接埠時採用 `PORT` |
 | `trust_forwarded` | 監聽 loopback 時為 true | 是否採用代理轉送的用戶端位址（每個位址的連線上限依此計算） |
-| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`zktls`、`bonds-age`、`verifier` |
+| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`zktls`、`bonds-age`、`verifier`、`twfido` |
 | `data_dir` | `/var/lib/diw-server` | 資料目錄（原生程式庫解壓、之後的金鑰） |
 | `relay_max_rooms` 等 | 見 3.1 | 中繼限制 |
 | `bonds_age_max_sessions`、`bonds_age_per_address` | `64`、`8` | 年齡查驗的同時請求數與每個位址的上限 |
@@ -184,6 +201,10 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | `signing_key_pem` | 無 | 簽章金鑰的整份 PEM（優先於檔案）；設定檔中可用 `\n` 表示換行 |
 | `signing_generate` | `true` | 金鑰檔不存在時自動產生；磁碟不保存的平台設 `false` |
 | `verifier_key_pem` | 無 | 網頁查驗端金鑰的整份 PEM（優先於 `verifier_key_dir`） |
+| `twfido_environment` | `production` | 行動自然人憑證服務的環境：`production` 或 `uat` |
+| `twfido_service_id`、`twfido_aes_key` | 無（啟用 `twfido` 時必填） | 內政部核發的 SP 服務代碼與 AES 金鑰（base64，32 位元組）；金鑰請以 secret 提供 |
+| `twfido_token_sha256` | `zktls_token_sha256` 的值 | 簽署用存取權杖的 SHA-256，以逗號分隔可列多個；兩者都未設定時拒絕啟動 |
+| `twfido_max_sessions`、`twfido_per_address`、`twfido_per_id` | `16`、`4`、`2` | 同時請求、每個位址與每個身分證號的上限 |
 
 ## 6. 1 GB 主機的資源配置
 
@@ -208,11 +229,10 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | S2 | zkTLS 查驗主機與回執、存取權杖、金鑰管理；錢包加權杖設定 | 錢包 e2e 以容器為主機完成主動網頁證明；900 MB cgroup 內通過並記錄峰值 |
 | S3 | CI 映像、release tarball、部署文件（含 Cloud Run） | 在乾淨 VPS 依文件部署，Caddy 取得憑證，手機可連線；Cloud Run 部署後手機可連線 |
 | S4 | zkPDF 證明器（等 M3c） | 在大記憶體主機產生證明，手機驗證後使用 |
-| TWFIDO SP | 行動自然人憑證的 SP 金鑰只放在服務端（錢包可選用服務端或編譯時設定的 SP） | 手機透過服務端推播簽署並自行驗證簽章與 MOICA 憑證鏈 |
+| TWFIDO SP | 行動自然人憑證的 SP 金鑰只放在服務端（錢包可選用服務端、編譯時設定的 SP 或手動設定） | 手機透過服務端推播簽署並自行驗證簽章與 MOICA 憑證鏈（需內政部 SP 帳號，由持有帳號者執行） |
 
-S1 至 S3 的程式與自動測試已完成（zkTLS 查驗主機以原生 TLSNotary 端對端測試通過）。S2 的 cgroup 實測、S3 的乾淨 VPS、Cloud Run 與 Cloudflare 實機部署由使用者執行。
+S1 至 S3 與 TWFIDO SP 的程式與自動測試已完成（zkTLS 查驗主機以原生 TLSNotary 端對端測試通過；TWFIDO SP 以本機模擬的內政部服務測試，含 `idp_checksum` 偽造與頻率限制）。S2 的 cgroup 實測、S3 的乾淨 VPS、Cloud Run 與 Cloudflare 實機部署由使用者執行。
 
 ## 9. 之後的方向
 
-- TWFIDO SP（2026-10-25 使用者要求）：服務端持有 SP 服務代碼與 AES 金鑰（secret），以錢包 `core` 的 `TwFidoClient` 呼叫內政部 API 並驗 `idp_checksum`。建立簽署需存取權杖並限制頻率，避免被用來對任意身分證號推播；log 不記身分證號與簽署內容。服務端看得到身分證號與要簽的位元組（CMS 時為含文件雜湊的簽署屬性，不含文件）。簽章值與憑證鏈由錢包自行驗證。
 - Native 化：Kotlin/Native 不可行（錢包 `core` 依賴 Multipaz JVM、BouncyCastle、JNA）。GraalVM native-image 需把 Netty 換成 CIO（Ktor 的 native image 只支援 CIO），並補 JNA、BouncyCastle 的設定；先以 AppCDS 縮短啟動，GraalVM 映像列為實驗性選項，JVM 映像保留。

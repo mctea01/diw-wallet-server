@@ -9,6 +9,10 @@ interface Env {
   SIGNING_KEY_PEM?: string;
   VERIFIER_KEY_PEM?: string;
   VERIFIER_ACCESS_TOKEN?: string;
+  TWFIDO_ENVIRONMENT?: string;
+  TWFIDO_SERVICE_ID?: string;
+  TWFIDO_TOKEN_SHA256?: string;
+  TWFIDO_AES_KEY?: string;
 }
 
 /**
@@ -36,6 +40,10 @@ export class DiwServer extends Container<Env> {
     if (env.SIGNING_KEY_PEM) vars.DIW_SIGNING_KEY_PEM = env.SIGNING_KEY_PEM;
     if (env.VERIFIER_KEY_PEM) vars.DIW_VERIFIER_KEY_PEM = env.VERIFIER_KEY_PEM;
     if (env.VERIFIER_ACCESS_TOKEN) vars.DIW_VERIFIER_ACCESS_TOKEN = env.VERIFIER_ACCESS_TOKEN;
+    if (env.TWFIDO_ENVIRONMENT) vars.DIW_TWFIDO_ENVIRONMENT = env.TWFIDO_ENVIRONMENT;
+    if (env.TWFIDO_SERVICE_ID) vars.DIW_TWFIDO_SERVICE_ID = env.TWFIDO_SERVICE_ID;
+    if (env.TWFIDO_TOKEN_SHA256) vars.DIW_TWFIDO_TOKEN_SHA256 = env.TWFIDO_TOKEN_SHA256;
+    if (env.TWFIDO_AES_KEY) vars.DIW_TWFIDO_AES_KEY = env.TWFIDO_AES_KEY;
     this.envVars = vars;
   }
 }

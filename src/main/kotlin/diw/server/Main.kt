@@ -1,6 +1,7 @@
 package diw.server
 
 import diw.wallet.core.did.DidResolver
+import diw.wallet.core.document.sign.MobileMoicaCredentials
 import diw.wallet.core.env.EnvironmentPolicy
 import diw.wallet.core.status.W3cStatusChecker
 import diw.wallet.core.trust.TrustRegistry
@@ -64,6 +65,8 @@ class Server(
     templateKeys: List<EcPublicKey>? = null,
     /** Pretends the native library has TLSNotary (tests without it). */
     zkTlsAvailable: Boolean? = null,
+    /** The TW FidO service address; tests point it at a local stand-in. */
+    twFidoBaseUrl: String? = null,
 ) {
     private val http by lazy { HttpClient(Java) }
     private val didTrust: DidTrust by lazy { didTrust ?: DidTrust(listOf(TwdiwTrustList(http))) }
@@ -98,6 +101,12 @@ class Server(
         ZkTlsHost(config.publicUrl, id, config.zkTls, { BuiltInAnchors.all.map { it.certificate.encoded.toByteArray() }.distinct() + zkTlsRoots }) { tlsn }
     }
 
+    /** Mobile citizen certificate signing with this server's SP account (the SP key never leaves the server). */
+    val twFido: TwFidoHost? = if (ServerConfig.FEATURE_TWFIDO !in config.features) null else TwFidoHost(
+        http, config.twFidoEnvironment, MobileMoicaCredentials(config.twFidoServiceId!!, config.twFidoAesKey!!), config.twFido,
+        twFidoBaseUrl ?: config.twFidoEnvironment.baseUrl,
+    )
+
     /** Whether every enabled feature can run: zktls needs TLSNotary in the native library. */
     val healthy: Boolean get() = zkTls == null || tlsn
 
@@ -118,6 +127,7 @@ class Server(
     fun prepare(scope: CoroutineScope) {
         templates?.start(scope)
         zkTls?.start(scope)
+        twFido?.start(scope)
         if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
         if (bondsAge == null || !config.bondsAgeVerify || nativeAgeVerifier != null) return
         if (ZkBackend.OPENAC_SPARTAN2 !in native) {
@@ -169,6 +179,8 @@ fun Application.module(server: Server) {
                     })
                 }
                 server.templates?.version?.let { put("templatesVersion", it) }
+                // Which TW FidO service this server's SP account signs with; the account itself stays private.
+                server.twFido?.let { put("twfido", buildJsonObject { put("environment", it.environment.name) }) }
             }
             call.respondText(body.toString(), ContentType.Application.Json)
         }
@@ -176,6 +188,7 @@ fun Application.module(server: Server) {
         server.bondsAge?.let { bondsAgeRoutes(it, server.config.bondsAge) }
         server.verifier?.let { verifierRoutes(it, server.config.verifierAccessToken) }
         server.zkTls?.let { zkTlsRoutes(it, server.config.zkTlsTokenHashes) }
+        server.twFido?.let { twFidoRoutes(it, server.config.twFidoTokenHashes) }
     }
 }
 

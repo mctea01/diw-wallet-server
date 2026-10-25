@@ -1,5 +1,6 @@
 package diw.server
 
+import diw.wallet.core.document.sign.MobileMoicaEnvironment
 import java.io.File
 import java.net.URI
 import java.util.Properties
@@ -50,6 +51,13 @@ data class ServerConfig(
     val signingKeyPem: String? = null,
     /** The web verifier's key (private then public PEM), from a platform secret; wins over [verifierKeyDir]. */
     val verifierKeyPem: String? = null,
+    /** The SP account for mobile citizen certificate signing (twfido): its service, its AES key and which service hosts. */
+    val twFidoEnvironment: MobileMoicaEnvironment = MobileMoicaEnvironment.PRODUCTION,
+    val twFidoServiceId: String? = null,
+    val twFidoAesKey: String? = null,
+    /** SHA-256 of the tokens that may ask for a signature; required with the twfido feature. */
+    val twFidoTokenHashes: List<ByteArray> = emptyList(),
+    val twFido: TwFidoLimits = TwFidoLimits(),
     /**
      * Take the client address from the reverse proxy's forwarded headers. Defaults to on only when listening on the
      * loopback interface; a container sets it explicitly because its port is reachable only from the proxy.
@@ -61,7 +69,8 @@ data class ServerConfig(
         const val FEATURE_BONDS_AGE = "bonds-age"
         const val FEATURE_VERIFIER = "verifier"
         const val FEATURE_ZKTLS = "zktls"
-        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER, FEATURE_ZKTLS)
+        const val FEATURE_TWFIDO = "twfido"
+        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER, FEATURE_ZKTLS, FEATURE_TWFIDO)
         const val DEFAULT_FILE = "/etc/diw-server/server.conf"
         val KEYS = setOf(
             "public_url", "listen_host", "listen_port", "features", "data_dir", "trust_forwarded",
@@ -70,6 +79,8 @@ data class ServerConfig(
             "verifier_name", "verifier_access_token", "verifier_key_dir", "verifier_max_sessions", "verifier_per_address",
             "zktls_token_sha256", "zktls_max_sessions", "zktls_per_address", "zktls_concurrent", "zktls_templates_file",
             "signing_key_file", "signing_generate", "signing_key_pem", "verifier_key_pem",
+            "twfido_environment", "twfido_service_id", "twfido_aes_key", "twfido_token_sha256",
+            "twfido_max_sessions", "twfido_per_address", "twfido_per_id",
         )
         private val HEX64 = Regex("^[0-9a-fA-F]{64}$")
 
@@ -116,12 +127,29 @@ data class ServerConfig(
                 "false" -> false
                 else -> throw IllegalArgumentException("$key must be true or false")
             }
-            val tokenHashes = values["zktls_token_sha256"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty().map { h ->
-                require(HEX64.matches(h)) { "zktls_token_sha256 must list SHA-256 hashes in hex (64 characters each)" }
+            fun hashes(key: String) = values[key]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty().map { h ->
+                require(HEX64.matches(h)) { "$key must list SHA-256 hashes in hex (64 characters each)" }
                 h.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             }
+            val tokenHashes = hashes("zktls_token_sha256")
             require(FEATURE_ZKTLS !in features || tokenHashes.isNotEmpty()) {
                 "The zktls feature needs zktls_token_sha256 (diw-server hash-token prints it)"
+            }
+            // The wallet sends one token to its server, so the zkTLS tokens are the default.
+            val twFidoTokens = hashes("twfido_token_sha256").ifEmpty { tokenHashes }
+            val twFidoServiceId = values["twfido_service_id"]?.takeIf { it.isNotBlank() }
+            val twFidoAesKey = values["twfido_aes_key"]?.takeIf { it.isNotBlank() }
+            val twFidoEnvironment = when (values["twfido_environment"]?.lowercase()) {
+                null, "", "production" -> MobileMoicaEnvironment.PRODUCTION
+                "uat" -> MobileMoicaEnvironment.UAT
+                else -> throw IllegalArgumentException("twfido_environment must be production or uat")
+            }
+            if (FEATURE_TWFIDO in features) {
+                require(twFidoServiceId != null && twFidoAesKey != null) { "The twfido feature needs twfido_service_id and twfido_aes_key" }
+                // Checked here so a wrong key stops the start instead of failing every request; the key itself is never printed.
+                val key = runCatching { java.util.Base64.getDecoder().decode(twFidoAesKey) }.getOrNull()
+                require(key != null && key.size == 32) { "twfido_aes_key must be the SP's 32-byte AES key in base64" }
+                require(twFidoTokens.isNotEmpty()) { "The twfido feature needs twfido_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)" }
             }
             val trustForwarded = bool("trust_forwarded", listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost")
             return ServerConfig(
@@ -164,6 +192,15 @@ data class ServerConfig(
                 // A PEM pasted on one line keeps its line breaks as \n.
                 signingKeyPem = values["signing_key_pem"]?.takeIf { it.isNotBlank() }?.replace("\\n", "\n"),
                 verifierKeyPem = values["verifier_key_pem"]?.takeIf { it.isNotBlank() }?.replace("\\n", "\n"),
+                twFidoEnvironment = twFidoEnvironment,
+                twFidoServiceId = twFidoServiceId,
+                twFidoAesKey = twFidoAesKey,
+                twFidoTokenHashes = twFidoTokens,
+                twFido = TwFidoLimits(
+                    maxSessions = int("twfido_max_sessions", 16, 1..1000),
+                    perAddress = int("twfido_per_address", 4, 1..1000),
+                    perId = int("twfido_per_id", 2, 1..100),
+                ),
             )
         }
     }

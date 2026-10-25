@@ -28,9 +28,14 @@
     "FEATURES": "relay,zktls,bonds-age",
     // SHA-256 of the zkTLS access token (diw-server hash-token prints it); empty only when zktls is not in FEATURES.
     "ZKTLS_TOKEN_SHA256": "",
+    // With twfido in FEATURES: the SP service ID from the Ministry of the Interior, the SHA-256 of the signing access
+    // token (empty: the zkTLS one) and, for a test account, TWFIDO_ENVIRONMENT "uat".
+    "TWFIDO_SERVICE_ID": "",
+    "TWFIDO_TOKEN_SHA256": "",
+    "TWFIDO_ENVIRONMENT": "production",
     // How long an idle instance keeps running; a relay room or zkTLS session never outlives 15 minutes.
     "SLEEP_AFTER": "20m"
   }
   // Secrets (wrangler secret put NAME < file): SIGNING_KEY_PEM (zktls), VERIFIER_KEY_PEM (verifier),
-  // VERIFIER_ACCESS_TOKEN (verifier, optional).
+  // VERIFIER_ACCESS_TOKEN (verifier, optional), TWFIDO_AES_KEY (twfido).
 }
