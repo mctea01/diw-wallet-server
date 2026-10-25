@@ -55,6 +55,8 @@ data class ServerConfig(
             }
             // Only known keys: other DIW_ variables (the wallet build's, the start script's DIW_SERVER_OPTS) are not settings.
             KEYS.forEach { key -> env["DIW_" + key.uppercase()]?.let { values[key] = it.trim() } }
+            // Cloud Run and similar platforms name the port to listen on in PORT.
+            if ("listen_port" !in values) env["PORT"]?.takeIf { it.isNotBlank() }?.let { values["listen_port"] = it.trim() }
             return from(values)
         }
 

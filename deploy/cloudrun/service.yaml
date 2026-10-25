@@ -1,0 +1,51 @@
+# Cloud Run service (gcloud run services replace deploy/cloudrun/service.yaml --region asia-east1).
+# Replace IMAGE and PUBLIC_URL first; see README "Cloud Run". Cloud Run terminates TLS itself, so no Caddy.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: diw-wallet-server
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        # Both parties of a relay room must reach the same instance, so never run more than one.
+        autoscaling.knative.dev/maxScale: "1"
+        autoscaling.knative.dev/minScale: "0"
+        run.googleapis.com/sessionAffinity: "true"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      # Relay connections are WebSocket requests; allow them the longest request time.
+      timeoutSeconds: 3600
+      containerConcurrency: 200
+      containers:
+        - image: IMAGE
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: DIW_PUBLIC_URL
+              value: PUBLIC_URL
+            - name: DIW_FEATURES
+              value: relay
+            # Google's front end sets X-Forwarded-For; the container is reachable only through it.
+            - name: DIW_TRUST_FORWARDED
+              value: "true"
+            - name: DIW_DATA_DIR
+              value: /tmp/diw-server
+            - name: JAVA_OPTS
+              value: -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+            periodSeconds: 30

@@ -54,9 +54,38 @@ docker compose up -d
 
 服務當掉時，systemd 會自動重啟它；紀錄寫進 journald（`journalctl -u diw-server`）。
 
+### 方式三：Google Cloud Run（不需主機）
+
+Cloud Run 自己處理 TLS，不用 Caddy；沒有連線時縮到 0 個執行個體，只在使用時計費，個人用量通常在免費額度內。
+
+1. 映像：Cloud Run 不能直接拉 ghcr.io。建立一個 Artifact Registry 遠端存放區代理 ghcr.io：
+   ```sh
+   gcloud artifacts repositories create ghcr --repository-format=docker --location=asia-east1 \
+     --mode=remote-repository --remote-docker-repo=https://ghcr.io
+   ```
+   映像位址為 `asia-east1-docker.pkg.dev/<專案>/ghcr/mctea01/diw-wallet-server:<版本>`。
+2. 編輯 `deploy/cloudrun/service.yaml`：把 `IMAGE` 換成上面的映像位址，`PUBLIC_URL` 換成對外網址。
+3. 部署並開放公開存取：
+   ```sh
+   gcloud run services replace deploy/cloudrun/service.yaml --region asia-east1
+   gcloud run services add-iam-policy-binding diw-wallet-server --region asia-east1 \
+     --member=allUsers --role=roles/run.invoker
+   ```
+4. 對外網址：可直接用部署後顯示的 `https://...run.app`，或以 `gcloud beta run domain-mappings create` 綁定自己的網域。改網址後要同步更新 `PUBLIC_URL` 並重新部署。
+
+注意：
+
+- 執行個體上限固定為 1。中繼的兩端必須連到同一個執行個體，不可調高。
+- 每條 WebSocket 連線最長 60 分鐘，中繼房間的上限是 15 分鐘，不受影響。
+- 閒置後第一次連線需要冷啟動（數秒）。要避免可把 `minScale` 改為 1，但會持續計費。
+
+### Cloudflare Workers
+
+Workers 不能執行 JVM，之後的 zkTLS 查驗主機與證明器也無法在上面執行。只有中繼可以用 Durable Objects 另外重寫，目前不提供，評估見 [docs/DESIGN.md](docs/DESIGN.md) 第 5.4 節。
+
 ### 設定
 
-所有設定與預設值見 [docs/DESIGN.md](docs/DESIGN.md) 第 5.3 節。每個設定都可以寫在設定檔，也可以用環境變數 `DIW_<鍵的大寫>` 指定，例如 `DIW_PUBLIC_URL`。
+所有設定與預設值見 [docs/DESIGN.md](docs/DESIGN.md) 第 5.5 節。每個設定都可以寫在設定檔，也可以用環境變數 `DIW_<鍵的大寫>` 指定，例如 `DIW_PUBLIC_URL`。
 
 ### 錢包端
 
