@@ -1,5 +1,5 @@
 # Cloud Run service (gcloud run services replace deploy/cloudrun/service.yaml --region asia-east1).
-# Replace IMAGE and PUBLIC_URL first; see README "Cloud Run". Cloud Run terminates TLS itself, so no Caddy.
+# Replace IMAGE, PUBLIC_URL and TOKEN_SHA256 first; see README "Cloud Run". Cloud Run terminates TLS itself, so no Caddy.
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
@@ -27,21 +27,38 @@ spec:
           env:
             - name: DIW_PUBLIC_URL
               value: PUBLIC_URL
-            # Add verifier for the web verifier; mount its key from Secret Manager and set DIW_VERIFIER_KEY_DIR to the
-            # mount, or its DID changes on every cold start.
+            # Add verifier for the web verifier (and uncomment DIW_VERIFIER_KEY_PEM below).
             - name: DIW_FEATURES
-              value: relay,bonds-age
+              value: relay,zktls,bonds-age
+            # SHA-256 of the zkTLS access token: printf '%s\n' "$TOKEN" | diw-server hash-token
+            - name: DIW_ZKTLS_TOKEN_SHA256
+              value: TOKEN_SHA256
+            # The disk is lost on every cold start, so the keys come from Secret Manager (see README "Cloud Run");
+            # a generated key would change and the wallet would ask the user to trust the server again.
+            - name: DIW_SIGNING_GENERATE
+              value: "false"
+            - name: DIW_SIGNING_KEY_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: diw-signing-key
+                  key: latest
+            # - name: DIW_VERIFIER_KEY_PEM
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: diw-verifier-key
+            #       key: latest
             # Google's front end sets X-Forwarded-For; the container is reachable only through it.
             - name: DIW_TRUST_FORWARDED
               value: "true"
             - name: DIW_DATA_DIR
               value: /tmp/diw-server
             - name: JAVA_OPTS
-              value: -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m
+              value: -Xmx384m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m
           resources:
             limits:
               cpu: "1"
-              memory: 512Mi
+              # One zkTLS verification peaked near 350 MB with the holder in the same JVM; 1 GiB leaves room.
+              memory: 1Gi
           startupProbe:
             httpGet:
               path: /healthz

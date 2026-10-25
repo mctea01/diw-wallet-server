@@ -1,6 +1,6 @@
 # DIW 正式服務端設計（diw-wallet-server）
 
-狀態：S1 已實作（中繼、健康檢查、設定、部署檔、Cloud Run），Bonds 年齡查驗主機與網頁查驗端已實作（可選功能）；S2 以後為設計。
+狀態：S1 至 S3 已實作（中繼、zkTLS 查驗主機與回執、存取權杖、金鑰管理、附執行環境的發行檔、容器、systemd、Cloud Run、Cloudflare Containers），Bonds 年齡查驗主機與網頁查驗端已實作（可選功能）；S3 的實機部署驗收待使用者執行。S4（zkPDF 證明器）與 TWFIDO SP 為設計。
 
 ## 1. 目的與範圍
 
@@ -12,7 +12,7 @@
 | 功能 | 版本 | 說明 | 1 GB 主機 |
 |---|---|---|---|
 | 中繼 | v1 | `/zktls/relay/{room}`，兩端各連一次後轉送二進位訊框；只看得到 Noise 密文，不參與信任，不儲存 | 可 |
-| zkTLS 查驗主機與 notary | v1 | `/zktls/profiles`、`/zktls/sessions`；以 TLSNotary proxy 模式查驗持有人的網頁證明，並簽發網頁證明回執（持有人主動產生時使用） | 一次一個工作階段，記憶體待實測 |
+| zkTLS 查驗主機與 notary | v1 | `/zktls/profiles`、`/zktls/sessions`；以 TLSNotary proxy 模式查驗持有人的網頁證明，並簽發網頁證明回執（持有人主動產生時使用） | 一次查驗一個；測試 JVM（主機與持有人同程序）峰值約 345 MB，cgroup 實測未做 |
 | zkPDF 證明器 | v2 | p4-zkp.md 第 8 節「送到自架主機產生」；主機會看到整份文件 | 不可，需數 GB 記憶體 |
 | 網頁查驗端 | v1（可選） | `/verify` 網頁與 `/api/oidvp/*`，以官方查驗端的方言向政府數位憑證皮夾請求卡片，也可查驗 Bonds 自然人憑證自發卡 | 可 |
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
@@ -51,17 +51,25 @@
 
 建立工作階段必須帶存取權杖，避免主機被他人當成免費的 notary 或 proxy。proxy 模式下主機會連往目標網站，但只連已安裝描述檔的 `host` 與 `port`，不接受請求中夾帶的描述檔。
 
+- 建立：本體 `{"profile","fields","purpose"}`（上限 16 KB，`purpose` 截為 100 字），回傳 `sessionId`、輪詢用 `token`、`request`（`diw-zktls://` 連結）與 `expiresAt`。錢包的 `ZkTlsFlow` 主動查驗與替他人查驗都用這個端點。
+- 請求以主機的簽章金鑰簽署（`x5c` 帶葉憑證與根），傳輸為 `wss://<public_url>/zktls/sessions/{sid}/ws`、模式 `proxy`。
+- 查驗沿用錢包 `core` 的 `ZkTlsVerification.verify` 與 `ZkTlsCheck.check`；伺服器憑證的信任根為 Mozilla 公開根加錢包內建的 GPKI 錨點。持有人要求時以同一把金鑰簽發網頁證明回執（`WebProofCredentials.receipts`）。
+- 狀態：`waiting`、`verifying`、`done`（附 `outcome`）、`failed`（附 `reason`）；簽發回執時加 `receipt: true`。
+- 限制：同時工作階段 16、每個位址 4、同時查驗 1（其餘連線以 `TRY_AGAIN_LATER` 關閉，持有人重試）；到期後再保留 5 分鐘供輪詢。結果只在記憶體。
+- 版型包：與錢包相同的簽章範本包（`zk-templates.jwt`），以錢包釘選的公鑰驗證；來源依序為資料目錄的快取、`zktls_templates_file`、錢包 Release。每 12 小時更新，較新的版本寫回快取。
+
 ### 3.3 健康與資訊
 
 - `GET /healthz`：程序與原生程式庫都正常時回 200，供容器與 systemd 檢查。
-- `GET /info`：版本、啟用的功能，以及簽章憑證鏈的 SHA-256 指紋（供使用者在錢包內比對後加入信任）。
+- `GET /info`：版本、啟用的功能、原生程式庫的後端，以及 `signing`（根憑證主體、`rootSha256` 與根憑證 PEM，供使用者在錢包內比對後加入信任）與 `templatesVersion`。
 
-### 3.4 錢包端需要的修改（在錢包 repo）
+### 3.4 錢包端的修改（在錢包 repo，已實作）
 
 - 設定改為一個「正式服務端」網址，同時用於中繼、zkTLS 查驗主機與年齡查驗主機（`zkVerifierUrl`），不必分別填寫。
 - 選填的存取權杖，存在加密儲存，只送到該主機。
 - 加入服務端時一併加入信任（2026-10-25 使用者要求）：錢包讀取 `/info` 的簽章根憑證與 SHA-256 指紋，顯示給使用者確認後，以正式環境、zkTLS 查驗方與網頁證明回執發行者的角色加入自訂信任（與使用者匯入的根相同，T2）。之後主機簽的查驗請求與回執經 `TrustRegistry.decide` 判定為 T2。未加入信任時以 T3 強提示，仍可使用（沿用現有信任模型）。
 - 服務端換鑰時指紋改變，錢包不自動接受，需使用者重新確認。
+- 實作：錢包的 `ServerModel`（讀取 `/info`、自行計算指紋並與服務端回報的比對、以 `server:<host>` 來源加入查驗方與發行者兩個角色的使用者錨點，換鑰時移除舊錨點）、設定的「零知識證明」頁「正式服務端」區塊（網址、權杖、加入信任與換鑰警示），`ZkTlsFlow` 只對設定的服務端帶 `Authorization: Bearer`。
 
 ### 3.5 Bonds 年齡查驗主機（`bonds-age`）
 
@@ -99,19 +107,23 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 ## 4. 金鑰與信任
 
-- 簽章金鑰：P-256，用來簽查驗請求（`x5c`）與網頁證明回執。
-- 兩種來源：
-  - 匯入：設定檔指定金鑰與憑證鏈的 PEM。
-  - 自動產生：第一次啟動時產生自簽根與葉憑證，存進資料目錄（權限 0600）。之後重啟沿用，不會換鑰。
+- 簽章金鑰：P-256，用來簽查驗請求（`x5c`）與網頁證明回執。憑證鏈為自簽根加葉憑證（葉憑證的 dNSName 為 `public_url` 的主機），效期 20 年；整份存成一個 PEM（私鑰後接葉憑證與根）。
+- 來源，依優先順序：
+  - `signing_key_pem`：整份 PEM 放在設定或環境變數（Cloud Run 的 Secret Manager、Cloudflare 的 secret）。
+  - `signing_key_file`：指定的檔案（預設 `data_dir/signing.pem`）。
+  - 自動產生：檔案不存在且 `signing_generate=true`（預設）時，第一次啟動產生並寫入（權限 0600），之後沿用；磁碟不保存的平台要設 `false`，沒有金鑰時拒絕啟動。
+- `diw-server keygen <檔案> <public_url>` 預先產生簽章金鑰，加 `verifier` 產生網頁查驗端金鑰（`verifier_key_pem` 或 `verifier_key_dir`）。
+- 存取權杖：設定只存 SHA-256（`diw-server hash-token` 由標準輸入讀權杖，至少 16 字元），比對採固定時間比較；可列多個以便輪換。
 - 金鑰、權杖與憑證從不寫入 log。
 
 ## 5. 部署
 
-自架主機時 TLS 由 Caddy 自動處理：自動申請與更新 Let's Encrypt 憑證、自動轉址 HTTPS、代理 WebSocket。不需要互動式 console。部署方式有三種：容器、不用容器、Cloud Run。
+自架主機時 TLS 由 Caddy 自動處理：自動申請與更新 Let's Encrypt 憑證、自動轉址 HTTPS、代理 WebSocket。不需要互動式 console。部署方式有四種：容器、不用容器、Cloud Run、Cloudflare Containers。
 
 ### 5.1 容器（建議）
 
-- CI 建出映像 `ghcr.io/<owner>/diw-wallet-server:<version>`，內含 JRE 與原生程式庫，以非 root 使用者執行。目前只有 amd64：錢包的原生程式庫只提供 linux-x86_64。
+- CI 建出映像 `ghcr.io/<owner>/diw-wallet-server:<version>`：Ubuntu 24.04 基底，內含 jlink 精簡的 Java 21 執行環境與原生程式庫，以非 root 使用者執行。目前只有 amd64：錢包的原生程式庫只提供 linux-x86_64。
+- 映像建置時跑一次服務產生 AppCDS 類別快取（`JDK_JAVA_OPTIONS=-XX:SharedArchiveFile=...`）。實測從啟動到 `/healthz` 可回應由 1.5 秒降為 0.8 秒，啟動後 RSS 由 153 MB 降為 103 MB（4 核心開發機，只開中繼）。
 - `compose.yaml` 包含 `server` 與 `caddy` 兩個服務：
   - `restart: unless-stopped`；
   - `healthcheck` 打 `/healthz`；
@@ -121,7 +133,8 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 ### 5.2 不用容器
 
-- Release 附 tarball：jlink 精簡的 JRE、程式 jar、原生程式庫、`diw-server.service` 範例與 `Caddyfile` 範例。
+- Release 附 `diw-server-<version>-linux-x86_64.tar.gz`（`./gradlew bundleTar`）：jlink 精簡的 Java 21（`runtime/`，含 CDS 基礎快取）、程式 jar、原生程式庫與 `deploy/` 下所有範例。啟動腳本在未設 `JAVA_HOME` 時使用 `runtime/`。另附不含執行環境的 `diw-server-<version>.tar`。
+- systemd 範例以 `-XX:+AutoCreateSharedArchive` 在資料目錄建立類別快取，升級後自動重建。
 - 以 systemd 管理：`Restart=on-failure`、`MemoryMax`、`DynamicUser` 或專用帳號、`StateDirectory`，log 寫進 journald。
 - Caddy 用發行版套件安裝，同樣自動處理憑證。
 
@@ -132,14 +145,18 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 執行個體上限 1：中繼與之後的查驗工作階段都在記憶體中，兩端必須連到同一個執行個體。下限 0，閒置不計費。
 - 請求逾時設為 3600 秒（平台上限），涵蓋中繼房間的 15 分鐘。
 - `trust_forwarded=true`：容器只能經由 Google 前端連入，`X-Forwarded-For` 可信。
-- 資料目錄在 `/tmp`（記憶體檔案系統，計入記憶體），重啟即消失。S2 的簽章金鑰不能自動產生在這裡，否則每次冷啟動都換鑰；Cloud Run 上改用 Secret Manager 掛載匯入的金鑰。
+- 資料目錄在 `/tmp`（記憶體檔案系統，計入記憶體），重啟即消失。簽章金鑰不能自動產生在這裡，否則每次冷啟動都換鑰：`service.yaml` 以 Secret Manager 的 `diw-signing-key` 提供 `DIW_SIGNING_KEY_PEM`，並設 `signing_generate=false`。
+- 記憶體上限 1 GiB、`-Xmx384m`，涵蓋一次 zkTLS 查驗。
 - 映像經 Artifact Registry 遠端存放區代理 ghcr.io。
 
-### 5.4 Cloudflare Workers 評估
+### 5.4 Cloudflare Containers
 
-- Workers 不能執行 JVM 與原生程式庫，查驗主機（S2）與證明器（S4）都無法部署。
-- 中繼可以重寫為 Durable Object：每個房間一個物件，以 WebSocket Hibernation 轉送二進位訊框，限制與第 3.1 節相同。費用低於 Cloud Run，但要另外維護一份 TypeScript 實作與測試。
-- 結論：目前不做。之後若只需要中繼且 Cloud Run 費用不可接受，再加 `workers/relay`，錢包端不需修改（同一路徑與協定）。
+- 用同一個映像。`deploy/cloudflare/` 的 Worker 把每個請求轉到名為 `main` 的單一容器執行個體（Durable Object 加 `@cloudflare/containers`，`max_instances` 為 1），WebSocket 直接轉送。
+- Worker 以 `CF-Connecting-IP` 覆寫 `X-Forwarded-For`（不附加，避免用戶端自選位址），容器設 `trust_forwarded=true`。
+- 磁碟不保存：金鑰由 secret 傳入（`SIGNING_KEY_PEM`、`VERIFIER_KEY_PEM`、`VERIFIER_ACCESS_TOKEN`），`signing_generate=false`；版型包每次冷啟動重新下載。
+- 執行個體類型預設 `standard-1`（4 GiB、1/2 vCPU），只開中繼可用 `basic`。閒置 `SLEEP_AFTER`（預設 20 分鐘）後休眠。
+- 費用：Workers Paid 每月 5 美元，含 25 GiB-小時記憶體與 375 vCPU-分鐘，休眠時不計。
+- 純 Workers（不用容器）不能執行 JVM 與原生程式庫；以 Durable Object 重寫中繼的方案已放棄（2026-10-25 使用者決定）。
 
 ### 5.5 設定
 
@@ -150,7 +167,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | `public_url` | 必填 | 對外網址，例如 `https://diw.example.org` |
 | `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0`；未指定連接埠時採用 `PORT` |
 | `trust_forwarded` | 監聽 loopback 時為 true | 是否採用代理轉送的用戶端位址（每個位址的連線上限依此計算） |
-| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`bonds-age`、`verifier` |
+| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`zktls`、`bonds-age`、`verifier` |
 | `data_dir` | `/var/lib/diw-server` | 資料目錄（原生程式庫解壓、之後的金鑰） |
 | `relay_max_rooms` 等 | 見 3.1 | 中繼限制 |
 | `bonds_age_max_sessions`、`bonds_age_per_address` | `64`、`8` | 年齡查驗的同時請求數與每個位址的上限 |
@@ -160,14 +177,21 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | `verifier_max_sessions`、`verifier_per_address` | `64`、`8` | 同時查驗數與每個位址的上限 |
 | `bonds_age_verify` | `false` | 在主機驗證年齡證明（需原生程式庫與約 450 MB 的驗證金鑰，記憶體建議 2 GB 以上，未實測） |
 
-S2 會加入：存取權杖（只存 SHA-256）、金鑰來源、工作階段上限、範本包來源（與錢包相同的簽章範本包，以釘選公鑰驗證）。
+| `zktls_token_sha256` | 無（啟用 `zktls` 時必填） | 存取權杖的 SHA-256，以逗號分隔可列多個 |
+| `zktls_max_sessions`、`zktls_per_address`、`zktls_concurrent` | `16`、`4`、`1` | 同時工作階段、每個位址的上限、同時查驗數 |
+| `zktls_templates_file` | 無 | 本機的簽章範本包，代替從錢包 Release 下載（仍以釘選公鑰驗證） |
+| `signing_key_file` | 資料目錄下的 `signing.pem` | 簽章金鑰檔 |
+| `signing_key_pem` | 無 | 簽章金鑰的整份 PEM（優先於檔案）；設定檔中可用 `\n` 表示換行 |
+| `signing_generate` | `true` | 金鑰檔不存在時自動產生；磁碟不保存的平台設 `false` |
+| `verifier_key_pem` | 無 | 網頁查驗端金鑰的整份 PEM（優先於 `verifier_key_dir`） |
 
 ## 6. 1 GB 主機的資源配置
 
 - JVM：`-Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m`。S1 只開中繼時，閒置 RSS 實測約 144 MB。
 - zkTLS 查驗同時只跑 1 個（可設定），其餘排隊或回 503。
 - 建議加 1 GB swap。
-- 驗收時在 `MemoryMax=900M` 的 cgroup 中跑完整的持有人查驗流程，記錄峰值 RSS。超出時降低工作階段上限，或只開中繼。
+- 已測：主機與持有人在同一個測試 JVM 完成一次真實的 TLSNotary 查驗，程序峰值 RSS（VmHWM）約 345 MB，耗時約 3 秒（4 核心）。主機單獨的峰值應更低，為推論。
+- 未測：在 `MemoryMax=900M` 的 cgroup 中以容器為主機跑完整的持有人查驗流程。部署驗收時執行並記錄峰值；超出時降低工作階段上限，或只開中繼。
 
 ## 7. 隱私與安全
 
@@ -184,3 +208,11 @@ S2 會加入：存取權杖（只存 SHA-256）、金鑰來源、工作階段上
 | S2 | zkTLS 查驗主機與回執、存取權杖、金鑰管理；錢包加權杖設定 | 錢包 e2e 以容器為主機完成主動網頁證明；900 MB cgroup 內通過並記錄峰值 |
 | S3 | CI 映像、release tarball、部署文件（含 Cloud Run） | 在乾淨 VPS 依文件部署，Caddy 取得憑證，手機可連線；Cloud Run 部署後手機可連線 |
 | S4 | zkPDF 證明器（等 M3c） | 在大記憶體主機產生證明，手機驗證後使用 |
+| TWFIDO SP | 行動自然人憑證的 SP 金鑰只放在服務端（錢包可選用服務端或編譯時設定的 SP） | 手機透過服務端推播簽署並自行驗證簽章與 MOICA 憑證鏈 |
+
+S1 至 S3 的程式與自動測試已完成（zkTLS 查驗主機以原生 TLSNotary 端對端測試通過）。S2 的 cgroup 實測、S3 的乾淨 VPS、Cloud Run 與 Cloudflare 實機部署由使用者執行。
+
+## 9. 之後的方向
+
+- TWFIDO SP（2026-10-25 使用者要求）：服務端持有 SP 服務代碼與 AES 金鑰（secret），以錢包 `core` 的 `TwFidoClient` 呼叫內政部 API 並驗 `idp_checksum`。建立簽署需存取權杖並限制頻率，避免被用來對任意身分證號推播；log 不記身分證號與簽署內容。服務端看得到身分證號與要簽的位元組（CMS 時為含文件雜湊的簽署屬性，不含文件）。簽章值與憑證鏈由錢包自行驗證。
+- Native 化：Kotlin/Native 不可行（錢包 `core` 依賴 Multipaz JVM、BouncyCastle、JNA）。GraalVM native-image 需把 Netty 換成 CIO（Ktor 的 native image 只支援 CIO），並補 JNA、BouncyCastle 的設定；先以 AppCDS 縮短啟動，GraalVM 映像列為實驗性選項，JVM 映像保留。

@@ -124,6 +124,18 @@ class TwdiwVerifier(
         companion object {
             suspend fun create(): Identity = Crypto.createEcPrivateKey(EcCurve.P256).let { Identity(it, DidKeys.didKeyJwkJcs(it.publicKey)) }
 
+            private val PRIVATE = Regex("-----BEGIN (EC )?PRIVATE KEY-----[\\s\\S]+?-----END (EC )?PRIVATE KEY-----")
+            private val PUBLIC = Regex("-----BEGIN PUBLIC KEY-----[\\s\\S]+?-----END PUBLIC KEY-----")
+
+            /** The private key PEM followed by the public key PEM, the form [parse] reads (a platform secret). */
+            fun pem(identity: Identity): String = identity.key.toPem() + "\n" + identity.key.publicKey.toPem() + "\n"
+
+            suspend fun parse(text: String): Identity {
+                val public = PUBLIC.find(text)?.value?.let { EcPublicKey.fromPem(it) } ?: throw IllegalArgumentException("No public key in verifier_key_pem")
+                val key = PRIVATE.find(text)?.value?.let { EcPrivateKey.fromPem(it, public) } ?: throw IllegalArgumentException("No private key in verifier_key_pem")
+                return Identity(key, DidKeys.didKeyJwkJcs(public))
+            }
+
             /** The key in [directory], made on first use (0600) so the DID stays the same across restarts. */
             suspend fun load(directory: File): Identity {
                 directory.mkdirs()

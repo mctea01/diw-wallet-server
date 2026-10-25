@@ -1,7 +1,8 @@
-# Install: copy the distribution to /opt/diw-server, this file to /etc/systemd/system/, the config example to
-# /etc/diw-server/server.conf, then: systemctl daemon-reload && systemctl enable --now diw-server
+# Install: unpack the release bundle (diw-server-<version>-linux-x86_64.tar.gz, with its own Java runtime) to
+# /opt/diw-server, copy this file to /etc/systemd/system/ and the config example to /etc/diw-server/server.conf,
+# then: systemctl daemon-reload && systemctl enable --now diw-server
 [Unit]
-Description=DIW wallet server (relay)
+Description=DIW wallet server
 After=network-online.target
 Wants=network-online.target
 
@@ -12,6 +13,8 @@ StateDirectory=diw-server
 ConfigurationDirectory=diw-server
 Environment=DIW_DATA_DIR=/var/lib/diw-server
 Environment="JAVA_OPTS=-Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
+# Class data sharing archive made on the first start and remade after an upgrade; about halves start time.
+Environment="JDK_JAVA_OPTIONS=-XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/var/lib/diw-server/diw-server.jsa"
 ExecStart=/opt/diw-server/bin/diw-server
 Restart=on-failure
 RestartSec=5

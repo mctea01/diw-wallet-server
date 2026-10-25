@@ -4,10 +4,19 @@ public_url=https://diw.example.org
 listen_host=127.0.0.1
 listen_port=8080
 features=relay
-# features=relay,bonds-age,verifier
+# features=relay,zktls,bonds-age,verifier
 # Relay limits (defaults shown).
 relay_max_rooms=64
 relay_lifetime_minutes=15
 relay_max_mb=256
 relay_max_frame_kb=128
 relay_per_address=8
+# zkTLS verifier host (features=zktls). Only SHA-256 hashes of the access tokens are stored here; make one with
+#   /opt/diw-server/bin/diw-server hash-token   (type the token, at least 16 characters, then Enter)
+# zktls_token_sha256=<64 hex>[,<another>]
+# The signing key is made in data_dir/signing.pem on the first start; or make it ahead with
+#   /opt/diw-server/bin/diw-server keygen /etc/diw-server/signing.pem https://diw.example.org
+# signing_key_file=/etc/diw-server/signing.pem
+# zktls_max_sessions=16
+# zktls_per_address=4
+# zktls_concurrent=1
