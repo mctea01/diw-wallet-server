@@ -133,7 +133,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 ### 5.2 不用容器
 
-- Release 附 `diw-server-<version>-linux-x86_64.tar.gz`（`./gradlew bundleTar`）：jlink 精簡的 Java 21（`runtime/`，含 CDS 基礎快取）、程式 jar、原生程式庫與 `deploy/` 下所有範例。啟動腳本在未設 `JAVA_HOME` 時使用 `runtime/`。另附不含執行環境的 `diw-server-<version>.tar`。
+- Release 附 `diw-server-<version>.tar`（`./gradlew distTar`）：jlink 精簡的 Java 21（`runtime/`，含 CDS 基礎快取）、程式 jar、原生程式庫與 `deploy/` 下所有範例。在 x86_64 Linux 建置時，發行檔（`installDist`、`distTar`）一律包含 `runtime/`，映像也直接取用；啟動腳本在未設 `JAVA_HOME` 時使用 `runtime/`。其他平台建置時不附執行環境。
 - systemd 範例以 `-XX:+AutoCreateSharedArchive` 在資料目錄建立類別快取，升級後自動重建。
 - 以 systemd 管理：`Restart=on-failure`、`MemoryMax`、`DynamicUser` 或專用帳號、`StateDirectory`，log 寫進 journald。
 - Caddy 用發行版套件安裝，同樣自動處理憑證。

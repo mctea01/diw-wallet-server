@@ -117,6 +117,7 @@ class Server(
      */
     fun prepare(scope: CoroutineScope) {
         templates?.start(scope)
+        zkTls?.start(scope)
         if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
         if (bondsAge == null || !config.bondsAgeVerify || nativeAgeVerifier != null) return
         if (ZkBackend.OPENAC_SPARTAN2 !in native) {

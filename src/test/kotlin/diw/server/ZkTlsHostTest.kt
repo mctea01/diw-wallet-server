@@ -13,6 +13,8 @@ import diw.wallet.core.zktls.ZkTlsProfiles
 import diw.wallet.core.zktls.ZkTlsSessionRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -22,9 +24,13 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.websocket.close
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -45,6 +51,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -152,6 +159,31 @@ class ZkTlsHostTest {
             setBody("""{"profile":"${ZkTlsRecordPage.PROFILE_ID}","fields":["name"],"purpose":"x"}""")
         }
         assertEquals(HttpStatusCode.ServiceUnavailable, r.status)
+    }
+
+    @Test
+    fun concurrentRequestsStayWithinTheLimits() = runBlocking<Unit> {
+        val server = server(config(extra = mapOf("zktls_templates_file" to packFile(8443).path, "zktls_max_sessions" to "5", "zktls_per_address" to "100")))
+        val host = server.zkTls!!
+        val results = (1..20).map { async(Dispatchers.Default) { host.create(ZkTlsRecordPage.PROFILE_ID, listOf("name"), "x", "203.0.113.1") } }.awaitAll()
+        assertEquals(5, results.count { it is ZkTlsHost.Created.Ok })
+        assertTrue(results.filterIsInstance<ZkTlsHost.Created.Refused>().all { it.status == HttpStatusCode.TooManyRequests })
+    }
+
+    @Test
+    fun aDroppedHolderEndsTheSession() = testApplication {
+        val server = server(config(extra = mapOf("zktls_templates_file" to packFile(8443).path)))
+        application { module(server) }
+        val host = server.zkTls!!
+        val created = assertIs<ZkTlsHost.Created.Ok>(host.create(ZkTlsRecordPage.PROFILE_ID, listOf("name"), "x", "203.0.113.1"))
+        val ws = createClient { install(WebSockets) }
+        runCatching { ws.webSocket("/zktls/sessions/${created.session.id}/ws") { close() } }
+        val status = withTimeout(30_000) {
+            while (host.state(created.session)["status"]!!.jsonPrimitive.content in setOf("waiting", "verifying")) delay(50)
+            host.state(created.session)["status"]!!.jsonPrimitive.content
+        }
+        // Not left "verifying", which would hold its place against the limits for good.
+        assertEquals("failed", status)
     }
 
     private fun tlsn(): Boolean {

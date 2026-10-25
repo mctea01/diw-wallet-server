@@ -37,7 +37,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -53,6 +55,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /** Sessions at once, sessions one address may hold, and proofs checked at the same time (each holds the MPC state). */
 data class ZkTlsLimits(val maxSessions: Int = 16, val perAddress: Int = 4, val concurrent: Int = 1)
@@ -150,18 +153,36 @@ class ZkTlsHost(
     private val sessions = ConcurrentHashMap<String, Session>()
     private val random = SecureRandom()
     private val running = Semaphore(limits.concurrent)
+    /** Makes the limit checks and the insertion one step, so concurrent requests cannot exceed the limits. */
+    private val admission = Mutex()
 
     fun offered(): List<ZkTlsProfile> = ZkTlsProfiles.installed
 
+    private fun expired(s: Session, now: Instant) = now > s.request.expiresAt + KEPT && s.status != "verifying"
+
     private fun prune() {
         val now = Clock.System.now()
-        sessions.values.removeIf { now > it.request.expiresAt + KEPT && it.status != "verifying" }
+        sessions.values.removeIf { expired(it, now) }
+    }
+
+    /** Drops expired sessions and their outcomes every minute, also when nobody calls the host. */
+    fun start(scope: CoroutineScope) {
+        scope.launch {
+            while (true) {
+                delay(1.minutes)
+                prune()
+            }
+        }
     }
 
     suspend fun create(profileId: String, fields: List<String>, purpose: String, creator: String): Created {
         if (!available()) return Created.Refused(HttpStatusCode.ServiceUnavailable, "unsupported", "這台查驗主機沒有 zkTLS（TLSNotary）原生程式庫")
         val profile = ZkTlsProfiles.find(profileId)
             ?: return Created.Refused(HttpStatusCode.BadRequest, "invalid_request", "查驗頁 $profileId 不在這台主機已安裝的版型包中")
+        return admission.withLock { admit(profile, fields, purpose, creator) }
+    }
+
+    private suspend fun admit(profile: ZkTlsProfile, fields: List<String>, purpose: String, creator: String): Created {
         prune()
         if (sessions.size >= limits.maxSessions || sessions.values.count { it.creator == creator } >= limits.perAddress) {
             return Created.Refused(HttpStatusCode.TooManyRequests, "busy", "查驗請求太多，請稍後再試")
@@ -185,8 +206,10 @@ class ZkTlsHost(
         return Created.Ok(session)
     }
 
+    /** The session for a poll; after its retention window it is gone even if no prune has run yet. */
     fun session(id: String, token: String?): Session? = sessions[id]?.takeIf {
-        token != null && MessageDigest.isEqual(it.token.encodeToByteArray(), token.encodeToByteArray())
+        token != null && MessageDigest.isEqual(it.token.encodeToByteArray(), token.encodeToByteArray()) &&
+            !expired(it, Clock.System.now())
     }
 
     /**
@@ -196,10 +219,12 @@ class ZkTlsHost(
     suspend fun run(id: String, channel: WebSocketChannel): String? {
         val s = sessions[id]?.takeIf { it.status == "waiting" && it.request.isFresh(Clock.System.now()) } ?: return "No such session"
         if (!running.tryAcquire()) return "Busy, try again"
+        var started = false
         try {
             synchronized(s) {
                 if (s.status != "waiting") return "No such session"
                 s.status = "verifying"
+                started = true
             }
             val result = withContext(Dispatchers.IO) {
                 try {
@@ -226,6 +251,11 @@ class ZkTlsHost(
             }
             return null
         } finally {
+            // A dropped connection or a cancelled handler must not leave the session counting against the limits.
+            if (started && s.status == "verifying") {
+                s.reason = "查驗中斷"
+                s.status = "failed"
+            }
             running.release()
         }
     }

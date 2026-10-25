@@ -38,13 +38,13 @@ docker compose up -d
 
 ### 方式二：不用容器（systemd）
 
-1. 安裝 [Caddy](https://caddyserver.com/docs/install)。不需要另外安裝 Java：Release 的 `diw-server-<版本>-linux-x86_64.tar.gz` 附精簡的 Java 執行環境（`runtime/`）。只有 x86_64 Linux 主機可用。
+1. 安裝 [Caddy](https://caddyserver.com/docs/install)。不需要另外安裝 Java：Release 的 `diw-server-<版本>.tar` 附精簡的 Java 執行環境（`runtime/`）。只有 x86_64 Linux 主機可用。
 2. 解壓到 `/opt/diw-server`：
    ```sh
    mkdir -p /opt/diw-server
-   tar xzf diw-server-<版本>-linux-x86_64.tar.gz -C /opt/diw-server --strip-components=1
+   tar xf diw-server-<版本>.tar -C /opt/diw-server --strip-components=1
    ```
-   解壓後應有 `/opt/diw-server/bin/diw-server` 與 `/opt/diw-server/deploy/`。只想用自己的 Java 21 時，可改用不含執行環境的 `diw-server-<版本>.tar`，並設定 `JAVA_HOME`。
+   解壓後應有 `/opt/diw-server/bin/diw-server`、`runtime/` 與 `deploy/`。想改用自己的 Java 21 時，設定 `JAVA_HOME` 即可。
 3. 複製設定與服務檔：
    ```sh
    mkdir -p /etc/diw-server
@@ -151,9 +151,8 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
 ```sh
 git submodule update --init
 export ANDROID_HOME=/path/to/android-sdk DIW_ZK_NATIVE=skip
-./gradlew test installDist runtimeImage
-docker build -t diw-wallet-server .   # 只打包 build/install/diw-server 與 build/runtime
-./gradlew bundleTar                   # 附執行環境的發行檔（只能在 x86_64 Linux 建置）
+./gradlew test installDist distTar   # 在 x86_64 Linux 上，發行檔附 jlink 執行環境（runtime/）
+docker build -t diw-wallet-server .  # 只打包 build/install/diw-server
 ```
 
 - 升級錢包版本：在 `wallet/` checkout 新的 commit，提交 submodule 指標的變更，並確認 CI 通過。
