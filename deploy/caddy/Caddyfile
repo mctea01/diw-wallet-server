@@ -1,0 +1,12 @@
+# Caddy obtains and renews the certificate for DIW_DOMAIN automatically (Let's Encrypt, HTTP-01 and TLS-ALPN-01),
+# redirects HTTP to HTTPS and proxies WebSocket upgrades. DIW_UPSTREAM is server:8080 in compose and
+# 127.0.0.1:8080 for a systemd install.
+{
+	email {$DIW_ACME_EMAIL}
+}
+
+{$DIW_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy {$DIW_UPSTREAM}
+}

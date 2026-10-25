@@ -1,0 +1,31 @@
+# Install: copy the distribution to /opt/diw-server, this file to /etc/systemd/system/, the config example to
+# /etc/diw-server/server.conf, then: systemctl daemon-reload && systemctl enable --now diw-server
+[Unit]
+Description=DIW wallet server (relay)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=diw-server
+ConfigurationDirectory=diw-server
+Environment=DIW_DATA_DIR=/var/lib/diw-server
+Environment="JAVA_OPTS=-Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
+ExecStart=/opt/diw-server/bin/diw-server
+Restart=on-failure
+RestartSec=5
+MemoryMax=700M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
