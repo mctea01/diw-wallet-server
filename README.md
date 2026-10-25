@@ -105,7 +105,7 @@ docker build -t diw-wallet-server .   # 只打包 build/install/diw-server
 ```
 
 - 升級錢包版本：在 `wallet/` checkout 新的 commit，提交 submodule 指標的變更，並確認 CI 通過。
-- CI 工作流程的草稿在 [docs/ci/ci.yml](docs/ci/ci.yml)，需由有權限的人放到 `.github/workflows/`。
+- CI 在 [.github/workflows/docker-image.yml](.github/workflows/docker-image.yml)：每次推送與 PR 執行測試，推送 `v*` 標籤時發佈映像與 Release。Agent 無法推送 workflow 檔，修改需由有權限的人貼上。
 
 ## 授權
 
