@@ -1,5 +1,5 @@
 # Tests every push to main and every pull request; a v* tag also publishes the container image to GHCR and
-# attaches the distribution tarball to a GitHub release.
+# attaches the distribution (with its Java runtime) to a GitHub release.
 name: ci
 
 on:
@@ -15,12 +15,14 @@ permissions:
 env:
   LANG: C.UTF-8
   JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
-  # The relay needs no native proof library; S2 switches this to require with DIW_ZK_FEATURES=tlsn.
-  DIW_ZK_NATIVE: skip
+  # The zkTLS verifier host needs TLSNotary; OpenAC serves bonds_age_verify. A missing toolchain fails the build.
+  DIW_ZK_NATIVE: require
+  DIW_ZK_FEATURES: openac,tlsn
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,8 +34,14 @@ jobs:
       # The wallet's core module has an Android target; the runner image's preinstalled SDK (ANDROID_HOME) is enough.
       # android-actions/setup-android@v3 fails with cmdline-tools 16.0, which no longer has the "tools" package.
       - uses: gradle/actions/setup-gradle@v4
-      - name: Test and build the distribution
-        run: ./gradlew test installDist distTar
+      # Rust is on the runner image; wallet/native/rust-toolchain.toml installs the pinned version on first use.
+      - name: Native build tools (protoc and libclang for OpenAC)
+        run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wallet/native -> target
+      - name: Test and build the distributions
+        run: ./gradlew --no-daemon --stacktrace test installDist distTar
       - uses: actions/upload-artifact@v4
         if: always()
         with:
