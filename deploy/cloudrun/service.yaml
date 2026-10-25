@@ -28,7 +28,7 @@ spec:
             - name: DIW_PUBLIC_URL
               value: PUBLIC_URL
             - name: DIW_FEATURES
-              value: relay
+              value: relay,bonds-age
             # Google's front end sets X-Forwarded-For; the container is reachable only through it.
             - name: DIW_TRUST_FORWARDED
               value: "true"

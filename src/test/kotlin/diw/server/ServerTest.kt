@@ -115,6 +115,11 @@ class ServerTest {
         assertFailsWith<IllegalArgumentException> { ServerConfig.from(mapOf("public_url" to "https://x", "features" to "prover")) }
         assertFailsWith<IllegalArgumentException> { ServerConfig.from(mapOf("public_url" to "https://x", "relay_max_rooms" to "0")) }
         assertFailsWith<IllegalArgumentException> { ServerConfig.from(mapOf("public_url" to "https://x", "typo" to "1")) }
+        val bonds = ServerConfig.from(mapOf("public_url" to "https://x", "features" to "relay, bonds-age", "bonds_age_verify" to "true", "bonds_age_per_address" to "3"))
+        assertEquals(setOf("relay", "bonds-age"), bonds.features)
+        assertTrue(bonds.bondsAgeVerify)
+        assertEquals(3, bonds.bondsAge.perAddress)
+        assertFailsWith<IllegalArgumentException> { ServerConfig.from(mapOf("public_url" to "https://x", "bonds_age_verify" to "yes")) }
     }
 
     @Test
