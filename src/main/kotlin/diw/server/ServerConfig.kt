@@ -27,6 +27,9 @@ data class ServerConfig(
     val features: Set<String> = setOf(FEATURE_RELAY),
     val dataDir: File = File("/var/lib/diw-server"),
     val relay: RelayLimits = RelayLimits(),
+    val bondsAge: BondsAgeLimits = BondsAgeLimits(),
+    /** Verify Bonds age proofs here (needs the native library and about 450 MB of verifying keys); otherwise relay only. */
+    val bondsAgeVerify: Boolean = false,
     /**
      * Take the client address from the reverse proxy's forwarded headers. Defaults to on only when listening on the
      * loopback interface; a container sets it explicitly because its port is reachable only from the proxy.
@@ -35,11 +38,13 @@ data class ServerConfig(
 ) {
     companion object {
         const val FEATURE_RELAY = "relay"
-        val FEATURES = setOf(FEATURE_RELAY)
+        const val FEATURE_BONDS_AGE = "bonds-age"
+        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE)
         const val DEFAULT_FILE = "/etc/diw-server/server.conf"
         val KEYS = setOf(
             "public_url", "listen_host", "listen_port", "features", "data_dir", "trust_forwarded",
             "relay_max_rooms", "relay_lifetime_minutes", "relay_max_mb", "relay_max_frame_kb", "relay_per_address",
+            "bonds_age_max_sessions", "bonds_age_per_address", "bonds_age_verify",
         )
 
         fun load(env: Map<String, String> = System.getenv()): ServerConfig {
@@ -79,12 +84,13 @@ data class ServerConfig(
             require(features.isNotEmpty()) { "features must name at least one feature" }
             (features - FEATURES).firstOrNull()?.let { throw IllegalArgumentException("Unknown feature: $it") }
             val listenHost = values["listen_host"] ?: "127.0.0.1"
-            val trustForwarded = when (values["trust_forwarded"]?.lowercase()) {
-                null -> listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost"
+            fun bool(key: String, default: Boolean): Boolean = when (values[key]?.lowercase()) {
+                null -> default
                 "true" -> true
                 "false" -> false
-                else -> throw IllegalArgumentException("trust_forwarded must be true or false")
+                else -> throw IllegalArgumentException("$key must be true or false")
             }
+            val trustForwarded = bool("trust_forwarded", listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost")
             return ServerConfig(
                 publicUrl = publicUrl,
                 listenHost = listenHost,
@@ -99,6 +105,11 @@ data class ServerConfig(
                     maxFrame = int("relay_max_frame_kb", 128, 1..1024) shl 10,
                     perAddress = int("relay_per_address", 8, 1..1000),
                 ),
+                bondsAge = BondsAgeLimits(
+                    maxSessions = int("bonds_age_max_sessions", 64, 1..10_000),
+                    perAddress = int("bonds_age_per_address", 8, 1..1000),
+                ),
+                bondsAgeVerify = bool("bonds_age_verify", false),
             )
         }
     }

@@ -28,6 +28,7 @@ dependencies {
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.forwarded.header)
+    implementation(libs.ktor.client.java)
     runtimeOnly(libs.slf4j.simple)
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
