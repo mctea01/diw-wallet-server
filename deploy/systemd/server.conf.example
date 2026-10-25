@@ -4,7 +4,7 @@ public_url=https://diw.example.org
 listen_host=127.0.0.1
 listen_port=8080
 features=relay
-# features=relay,zktls,bonds-age,verifier
+# features=relay,zktls,bonds-age,verifier,twfido
 # Relay limits (defaults shown).
 relay_max_rooms=64
 relay_lifetime_minutes=15
@@ -20,3 +20,13 @@ relay_per_address=8
 # zktls_max_sessions=16
 # zktls_per_address=4
 # zktls_concurrent=1
+# Mobile citizen certificate signing with this server's SP account (features=twfido). The AES key is a secret: keep
+# this file mode 0600 or set DIW_TWFIDO_AES_KEY in the unit's environment file instead.
+# twfido_environment=production
+# twfido_service_id=<service id>
+# twfido_aes_key=<base64, 32 bytes>
+# Defaults to zktls_token_sha256: the wallet sends the same token to both.
+# twfido_token_sha256=<64 hex>[,<another>]
+# twfido_max_sessions=16
+# twfido_per_address=4
+# twfido_per_id=2

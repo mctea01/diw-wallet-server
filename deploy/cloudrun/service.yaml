@@ -47,6 +47,18 @@ spec:
             #     secretKeyRef:
             #       name: diw-verifier-key
             #       key: latest
+            # Mobile citizen certificate signing (add twfido to DIW_FEATURES): the SP account from the Ministry of
+            # the Interior, its AES key in Secret Manager (gcloud secrets create diw-twfido-key --data-file=-), and the
+            # SHA-256 of the signing access token (unset: the zkTLS one). DIW_TWFIDO_ENVIRONMENT=uat for a test account.
+            # - name: DIW_TWFIDO_SERVICE_ID
+            #   value: SP_SERVICE_ID
+            # - name: DIW_TWFIDO_TOKEN_SHA256
+            #   value: TOKEN_SHA256
+            # - name: DIW_TWFIDO_AES_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: diw-twfido-key
+            #       key: latest
             # Google's front end sets X-Forwarded-For; the container is reachable only through it.
             - name: DIW_TRUST_FORWARDED
               value: "true"

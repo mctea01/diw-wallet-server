@@ -36,6 +36,8 @@ dependencies {
     testImplementation("diw-wallet:test-servers")
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.websockets)
+    // A self-signed holder certificate for the mobile citizen certificate stand-in.
+    testImplementation(libs.bcpkix)
 }
 
 // Modules from jdeps --print-module-deps over the distribution, plus what is loaded by name at runtime (EC and

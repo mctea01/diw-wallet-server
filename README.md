@@ -8,6 +8,7 @@
 - **zkTLS 查驗主機**（`/zktls/*`，`features` 加 `zktls`）：以 TLSNotary 的 proxy 模式查驗持有人對政府查驗頁的網頁證明，並簽發網頁證明回執。只查驗已安裝簽章版型包中的頁面；建立查驗需要存取權杖，主機只存權杖的 SHA-256。簽章金鑰的根憑證指紋列在 `/info`，錢包加入服務端時讓使用者比對後加入信任。
 - **Bonds 年齡查驗主機**（`/api/zkp/*`，可選，`features` 加 `bonds-age`）：與 Bonds 查驗網站相同的 API。預設只轉送證明包，由查驗方的手機驗證；設 `bonds_age_verify=true` 時改在主機驗證（需較大記憶體，不適合 1 GB 主機）。
 - **網頁查驗端**（`/verify`，可選，`features` 加 `verifier`）：查驗方在網頁輸入卡片類型與欄位，持卡人以政府數位憑證皮夾掃描 QR Code 出示，頁面顯示判定與要求的欄位；也可查驗 Bonds 的自然人憑證自發卡。可設 `verifier_access_token` 限制只有知道存取碼的人能建立查驗。
+- **行動自然人憑證簽署**（`/twfido/sign`，可選，`features` 加 `twfido`）：以這台服務端的 SP 帳號向內政部要求行動自然人憑證簽署，SP 金鑰只放在服務端，不必放進 App。需要內政部核發的 SP 帳號；建立簽署需要存取權杖，避免被用來對任意身分證號推播。服務端看得到身分證號與要簽的位元組（不含文件），只放在記憶體、不寫入 log；簽章由錢包自行驗證。
 - **健康檢查**（`/healthz`）與**版本資訊**（`/info`）。
 
 zkPDF 證明器（S4）尚未實作。
@@ -108,6 +109,7 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
    - `PUBLIC_URL`：`https://diw-wallet-server.<帳號子網域>.workers.dev`，或綁定到這個 Worker 的自訂網域。
    - `FEATURES`：要啟用的功能。
    - `ZKTLS_TOKEN_SHA256`：存取權杖的 SHA-256（取得方式同 Cloud Run 第 3 步）。
+   - 啟用 `twfido` 時：`TWFIDO_SERVICE_ID`、`TWFIDO_TOKEN_SHA256`（留空時沿用上面的值），測試帳號另設 `TWFIDO_ENVIRONMENT` 為 `uat`。
 4. 放入金鑰（容器的磁碟在重啟後消失，金鑰一定要用 secret）：
    ```sh
    cd deploy/cloudflare
@@ -115,6 +117,7 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
    npx wrangler login
    npx wrangler secret put SIGNING_KEY_PEM < signing.pem      # 產生方式同 Cloud Run 第 2 步
    npx wrangler secret put VERIFIER_KEY_PEM < verifier.pem    # 只有啟用 verifier 時需要
+   npx wrangler secret put TWFIDO_AES_KEY                     # 只有啟用 twfido 時需要，貼上 SP 的 AES 金鑰
    npx wrangler deploy
    ```
 5. 部署後打開 `<PUBLIC_URL>/info` 確認功能與 `signing.rootSha256`。
@@ -135,6 +138,7 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
 - 簽章金鑰（`zktls`）：簽查驗請求與網頁證明回執。自架主機第一次啟動時自動產生在 `data_dir/signing.pem`（權限 0600），之後沿用；也可以 `diw-server keygen <檔案> <對外網址>` 預先產生，再以 `signing_key_file` 指定，或把整份 PEM 放進 `signing_key_pem`（Cloud Run 與 Cloudflare 用這個）。
 - 換鑰會讓根憑證指紋改變，所有錢包都要重新確認信任，請備份 `signing.pem`。
 - 存取權杖：設定只存 SHA-256（`zktls_token_sha256`，可用逗號列多個，方便輪換）。權杖本身交給要使用這台主機的人，填進錢包。
+- 行動自然人憑證 SP（`twfido`）：`twfido_service_id` 與 `twfido_aes_key`（內政部核發，AES 金鑰為 base64 的 32 位元組）、`twfido_token_sha256`（未設定時沿用 `zktls_token_sha256`；錢包只填一個權杖，兩者都要含錢包用的那個），測試帳號另設 `twfido_environment=uat`。AES 金鑰請以 secret 提供：自架主機放在權限 0600 的設定檔或 `.env`，Cloud Run 用 Secret Manager（`service.yaml` 中 `DIW_TWFIDO_AES_KEY` 的註解），Cloudflare 用 `npx wrangler secret put TWFIDO_AES_KEY`。
 - 金鑰、權杖與憑證從不寫入 log。
 
 ### 錢包端
@@ -143,6 +147,8 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
 
 1. 填入存取權杖並儲存。
 2. 按「加入信任」，把畫面上的 SHA-256 與 `/info` 的 `signing.rootSha256`（或部署時 `keygen` 印出的值）逐字比對，相符再確認。之後這台主機簽的查驗請求與回執會以使用者匯入（T2）顯示。
+
+啟用 `twfido` 時，錢包以行動自然人憑證簽署時可選「正式服務端的 SP」（設定了正式服務端時為預設），使用同一個存取權杖。
 
 ## 開發
 
