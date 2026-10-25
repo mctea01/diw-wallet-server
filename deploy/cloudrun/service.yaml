@@ -27,6 +27,8 @@ spec:
           env:
             - name: DIW_PUBLIC_URL
               value: PUBLIC_URL
+            # Add verifier for the web verifier; mount its key from Secret Manager and set DIW_VERIFIER_KEY_DIR to the
+            # mount, or its DID changes on every cold start.
             - name: DIW_FEATURES
               value: relay,bonds-age
             # Google's front end sets X-Forwarded-For; the container is reachable only through it.

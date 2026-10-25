@@ -1,6 +1,6 @@
 # DIW 正式服務端設計（diw-wallet-server）
 
-狀態：S1 已實作（中繼、健康檢查、設定、部署檔、Cloud Run），Bonds 年齡查驗主機已實作（可選功能）；S2 以後為設計。
+狀態：S1 已實作（中繼、健康檢查、設定、部署檔、Cloud Run），Bonds 年齡查驗主機與網頁查驗端已實作（可選功能）；S2 以後為設計。
 
 ## 1. 目的與範圍
 
@@ -14,6 +14,7 @@
 | 中繼 | v1 | `/zktls/relay/{room}`，兩端各連一次後轉送二進位訊框；只看得到 Noise 密文，不參與信任，不儲存 | 可 |
 | zkTLS 查驗主機與 notary | v1 | `/zktls/profiles`、`/zktls/sessions`；以 TLSNotary proxy 模式查驗持有人的網頁證明，並簽發網頁證明回執（持有人主動產生時使用） | 一次一個工作階段，記憶體待實測 |
 | zkPDF 證明器 | v2 | p4-zkp.md 第 8 節「送到自架主機產生」；主機會看到整份文件 | 不可，需數 GB 記憶體 |
+| 網頁查驗端 | v1（可選） | `/verify` 網頁與 `/api/oidvp/*`，以官方查驗端的方言向政府數位憑證皮夾請求卡片，也可查驗 Bonds 自然人憑證自發卡 | 可 |
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
 
 ## 2. 技術選擇
@@ -78,6 +79,24 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 主機驗證（`bonds_age_verify=true`）：需要含 OpenAC 的原生程式庫，啟動時把兩把驗證金鑰（以釘選雜湊）安裝到資料目錄，完成前只轉送。一次只驗一個，忙碌時回 503 讓持有人重送。政府卡的發卡者需在 TWDIW 信任清單（T2 以上），自發卡標示為自我聲明。
 - 限制：同時請求數 64、每個位址 8 個；請求 5 分鐘到期。
 
+### 3.6 網頁查驗端（`verifier`）
+
+查驗方在 `/verify` 輸入卡片類型代碼與要揭露的欄位，頁面顯示 QR Code，持卡人以皮夾掃描出示，頁面輪詢後顯示結果。也可只用 API。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| POST | `/api/oidvp/sessions` | 建立查驗（`kind` 為 `twdiw` 或 `moica`、`cardType`、`fields`、`purpose`），回傳 `modadigitalwallet://` 與 `openid4vp://` 連結與輪詢權杖；設定存取碼時需 `Authorization: Bearer` |
+| GET | `/api/oidvp/request/{id}` | 簽章的請求物件（`oauth-authz-req+jwt`），回覆後不再提供 |
+| POST | `/api/oidvp/response` | 皮夾的 `direct_post`（form），成功回 `{"code":"0"}` |
+| GET | `/api/oidvp/sessions/{id}?token=` | 狀態與結果 |
+| GET | `/api/oidvp/sessions/{id}/qr.svg?token=&scheme=` | QR Code |
+
+- 方言依官方查驗端（錢包 docs/research/twdiw.md 1.4、4.3 節）：裸 did:key 的 client_id、以參照傳遞的簽章請求物件、Presentation Exchange 以 `$.type` 指定卡片類型、`direct_post`、jwt_vp 內含卡片的 SD-JWT。自發卡沿用 Bonds 的 `vc+moica` 描述。
+- 檢查：持有者簽章與 `aud`、`nonce`；卡片的發卡者簽章、持有者綁定（`sub` 與 `cnf`）、效期、每個揭露都有發卡者承諾、卡片類型；發卡者需在 TWDIW 信任清單（T2 以上）才判定通過；有狀態清單時查詢撤銷狀態（逾時則註明未檢查）。自發卡以 MOICA 憑證鏈驗證，標示為持卡人自我聲明。
+- 只顯示要求的欄位；官方皮夾以子字串比對選欄位，可能多送，多送的欄位不顯示也不保存。
+- 查驗端身分：P-256 金鑰與其 did:key（jwk_jcs-pub），第一次啟動時產生在 `verifier_key_dir`（預設資料目錄下的 `verifier/`，權限 0600），之後沿用；`/info` 的 `verifierDid` 列出 DID。開源版官方皮夾查不到未註冊的 DID 時仍可繼續（推論新版也是如此，未實測）；要在同意畫面顯示機關名稱需向數位發展部註冊這個 DID。
+- 結果只存在記憶體，請求到期後再保留 5 分鐘供頁面讀取，不寫入 log。
+
 ## 4. 金鑰與信任
 
 - 簽章金鑰：P-256，用來簽查驗請求（`x5c`）與網頁證明回執。
@@ -131,10 +150,14 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | `public_url` | 必填 | 對外網址，例如 `https://diw.example.org` |
 | `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0`；未指定連接埠時採用 `PORT` |
 | `trust_forwarded` | 監聽 loopback 時為 true | 是否採用代理轉送的用戶端位址（每個位址的連線上限依此計算） |
-| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`bonds-age` |
+| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`bonds-age`、`verifier` |
 | `data_dir` | `/var/lib/diw-server` | 資料目錄（原生程式庫解壓、之後的金鑰） |
 | `relay_max_rooms` 等 | 見 3.1 | 中繼限制 |
 | `bonds_age_max_sessions`、`bonds_age_per_address` | `64`、`8` | 年齡查驗的同時請求數與每個位址的上限 |
+| `verifier_name` | `DIW 網頁查驗` | 持卡人同意畫面上的查驗方名稱 |
+| `verifier_access_token` | 無 | 設定後建立查驗需輸入這個存取碼（至少 8 字元）；未設定時任何人都可使用 |
+| `verifier_key_dir` | 資料目錄下的 `verifier/` | 查驗端金鑰的位置；Cloud Run 上請掛載 Secret，否則每次冷啟動 DID 都會改變 |
+| `verifier_max_sessions`、`verifier_per_address` | `64`、`8` | 同時查驗數與每個位址的上限 |
 | `bonds_age_verify` | `false` | 在主機驗證年齡證明（需原生程式庫與約 450 MB 的驗證金鑰，記憶體建議 2 GB 以上，未實測） |
 
 S2 會加入：存取權杖（只存 SHA-256）、金鑰來源、工作階段上限、範本包來源（與錢包相同的簽章範本包，以釘選公鑰驗證）。

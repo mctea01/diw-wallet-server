@@ -30,6 +30,13 @@ data class ServerConfig(
     val bondsAge: BondsAgeLimits = BondsAgeLimits(),
     /** Verify Bonds age proofs here (needs the native library and about 450 MB of verifying keys); otherwise relay only. */
     val bondsAgeVerify: Boolean = false,
+    val verifier: VerifierLimits = VerifierLimits(),
+    /** The verifier's name on the holder's consent screen. */
+    val verifierName: String = "DIW 網頁查驗",
+    /** When set, creating a verification needs this code (the page asks for it); otherwise anyone may use the page. */
+    val verifierAccessToken: String? = null,
+    /** Where the verifier's signing key is kept; its DID changes when the key does. */
+    val verifierKeyDir: File? = null,
     /**
      * Take the client address from the reverse proxy's forwarded headers. Defaults to on only when listening on the
      * loopback interface; a container sets it explicitly because its port is reachable only from the proxy.
@@ -39,12 +46,14 @@ data class ServerConfig(
     companion object {
         const val FEATURE_RELAY = "relay"
         const val FEATURE_BONDS_AGE = "bonds-age"
-        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE)
+        const val FEATURE_VERIFIER = "verifier"
+        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER)
         const val DEFAULT_FILE = "/etc/diw-server/server.conf"
         val KEYS = setOf(
             "public_url", "listen_host", "listen_port", "features", "data_dir", "trust_forwarded",
             "relay_max_rooms", "relay_lifetime_minutes", "relay_max_mb", "relay_max_frame_kb", "relay_per_address",
             "bonds_age_max_sessions", "bonds_age_per_address", "bonds_age_verify",
+            "verifier_name", "verifier_access_token", "verifier_key_dir", "verifier_max_sessions", "verifier_per_address",
         )
 
         fun load(env: Map<String, String> = System.getenv()): ServerConfig {
@@ -110,6 +119,15 @@ data class ServerConfig(
                     perAddress = int("bonds_age_per_address", 8, 1..1000),
                 ),
                 bondsAgeVerify = bool("bonds_age_verify", false),
+                verifier = VerifierLimits(
+                    maxSessions = int("verifier_max_sessions", 64, 1..10_000),
+                    perAddress = int("verifier_per_address", 8, 1..1000),
+                ),
+                verifierName = values["verifier_name"]?.filter { !it.isISOControl() }?.take(60)?.takeIf { it.isNotBlank() } ?: "DIW 網頁查驗",
+                verifierAccessToken = values["verifier_access_token"]?.takeIf { it.isNotEmpty() }?.also {
+                    require(it.length >= 8) { "verifier_access_token must be at least 8 characters" }
+                },
+                verifierKeyDir = values["verifier_key_dir"]?.takeIf { it.isNotBlank() }?.let { File(it) },
             )
         }
     }

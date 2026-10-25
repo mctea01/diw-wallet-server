@@ -12,18 +12,14 @@ import diw.wallet.core.util.str
 import diw.wallet.core.zk.OpenAcAgeVerifier
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.plugins.origin
-import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
-import io.ktor.utils.io.readRemaining
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -156,18 +152,6 @@ class BondsAge(
         val GRACE = 60.seconds
         private const val ANSWERED = ""
     }
-}
-
-private suspend fun ApplicationCall.respondJson(body: JsonObject, status: HttpStatusCode = HttpStatusCode.OK) =
-    respondText(body.toString(), ContentType.Application.Json, status)
-
-private suspend fun ApplicationCall.respondError(status: HttpStatusCode, error: String, description: String) =
-    respondJson(buildJsonObject { put("error", error); put("error_description", description) }, status)
-
-/** The body as text, or null when it is longer than [max] bytes. */
-private suspend fun ApplicationCall.receiveLimited(max: Int): String? {
-    val bytes = receiveChannel().readRemaining(max.toLong() + 1).readByteArray()
-    return if (bytes.size > max) null else bytes.decodeToString()
 }
 
 fun Route.bondsAgeRoutes(service: BondsAge, limits: BondsAgeLimits) {

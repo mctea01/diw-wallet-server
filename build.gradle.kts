@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.forwarded.header)
     implementation(libs.ktor.client.java)
+    implementation(libs.zxing.core)
     runtimeOnly(libs.slf4j.simple)
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)

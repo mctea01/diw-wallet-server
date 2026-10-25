@@ -14,6 +14,7 @@ ktor-server-forwarded-header = { module = "io.ktor:ktor-server-forwarded-header"
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
+zxing-core = { module = "com.google.zxing:core", version = "3.5.4" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.17" }
 
 [plugins]
