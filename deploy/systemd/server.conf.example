@@ -1,0 +1,12 @@
+# /etc/diw-server/server.conf. Every key can also be set as an environment variable DIW_<KEY in upper case>.
+public_url=https://diw.example.org
+# Caddy on the same host proxies to this address; forwarded client addresses are trusted on loopback.
+listen_host=127.0.0.1
+listen_port=8080
+features=relay
+# Relay limits (defaults shown).
+relay_max_rooms=64
+relay_lifetime_minutes=15
+relay_max_mb=256
+relay_max_frame_kb=128
+relay_per_address=8

@@ -1,0 +1,3 @@
+[submodule "wallet"]
+	path = wallet
+	url = https://github.com/mctea01/my-Bonds-fork-android

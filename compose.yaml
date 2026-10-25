@@ -1,0 +1,48 @@
+# Production deployment: the server behind Caddy, which obtains and renews the TLS certificate by itself.
+# Fill in .env (see .env.example), then: docker compose up -d
+services:
+  server:
+    image: ghcr.io/mctea01/diw-wallet-server:${DIW_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      DIW_PUBLIC_URL: https://${DIW_DOMAIN:?set DIW_DOMAIN in .env}
+      DIW_FEATURES: ${DIW_FEATURES:-relay}
+      # The port is reachable only from Caddy on this network, so its forwarded client address is trusted.
+      DIW_TRUST_FORWARDED: "true"
+      JAVA_OPTS: ${DIW_JAVA_OPTS:--Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m}
+    volumes:
+      - server-data:/var/lib/diw-server
+    expose:
+      - "8080"
+    mem_limit: ${DIW_MEMORY_LIMIT:-700m}
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DIW_DOMAIN: ${DIW_DOMAIN}
+      DIW_ACME_EMAIL: ${DIW_ACME_EMAIL:?set DIW_ACME_EMAIL in .env}
+      DIW_UPSTREAM: server:8080
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  server-data:
+  caddy-data:
+  caddy-config:
