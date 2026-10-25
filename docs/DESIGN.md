@@ -70,11 +70,11 @@
 
 ## 5. 部署
 
-TLS 由 Caddy 自動處理：自動申請與更新 Let's Encrypt 憑證、自動轉址 HTTPS、代理 WebSocket。不需要互動式 console。兩種部署方式擇一：
+自架主機時 TLS 由 Caddy 自動處理：自動申請與更新 Let's Encrypt 憑證、自動轉址 HTTPS、代理 WebSocket。不需要互動式 console。部署方式有三種：容器、不用容器、Cloud Run。
 
 ### 5.1 容器（建議）
 
-- CI 建出多架構映像 `ghcr.io/<owner>/diw-wallet-server:<version>`（amd64、arm64），內含 JRE 與原生程式庫，以非 root 使用者執行。
+- CI 建出映像 `ghcr.io/<owner>/diw-wallet-server:<version>`，內含 JRE 與原生程式庫，以非 root 使用者執行。目前只有 amd64：錢包的原生程式庫只提供 linux-x86_64。
 - `compose.yaml` 包含 `server` 與 `caddy` 兩個服務：
   - `restart: unless-stopped`；
   - `healthcheck` 打 `/healthz`；
@@ -88,14 +88,30 @@ TLS 由 Caddy 自動處理：自動申請與更新 Let's Encrypt 憑證、自動
 - 以 systemd 管理：`Restart=on-failure`、`MemoryMax`、`DynamicUser` 或專用帳號、`StateDirectory`，log 寫進 journald。
 - Caddy 用發行版套件安裝，同樣自動處理憑證。
 
-### 5.3 設定
+### 5.3 Cloud Run
+
+- 用同一個映像，以 `deploy/cloudrun/service.yaml` 部署。Cloud Run 終止 TLS，不需要 Caddy。
+- 平台以 `PORT` 告知監聽連接埠；設定檔與 `DIW_LISTEN_PORT` 都未指定時才採用。
+- 執行個體上限 1：中繼與之後的查驗工作階段都在記憶體中，兩端必須連到同一個執行個體。下限 0，閒置不計費。
+- 請求逾時設為 3600 秒（平台上限），涵蓋中繼房間的 15 分鐘。
+- `trust_forwarded=true`：容器只能經由 Google 前端連入，`X-Forwarded-For` 可信。
+- 資料目錄在 `/tmp`（記憶體檔案系統，計入記憶體），重啟即消失。S2 的簽章金鑰不能自動產生在這裡，否則每次冷啟動都換鑰；Cloud Run 上改用 Secret Manager 掛載匯入的金鑰。
+- 映像經 Artifact Registry 遠端存放區代理 ghcr.io。
+
+### 5.4 Cloudflare Workers 評估
+
+- Workers 不能執行 JVM 與原生程式庫，查驗主機（S2）與證明器（S4）都無法部署。
+- 中繼可以重寫為 Durable Object：每個房間一個物件，以 WebSocket Hibernation 轉送二進位訊框，限制與第 3.1 節相同。費用低於 Cloud Run，但要另外維護一份 TypeScript 實作與測試。
+- 結論：目前不做。之後若只需要中繼且 Cloud Run 費用不可接受，再加 `workers/relay`，錢包端不需修改（同一路徑與協定）。
+
+### 5.5 設定
 
 `key=value` 設定檔（預設 `/etc/diw-server/server.conf`，或以 `DIW_CONFIG` 指定），每個鍵都可用環境變數 `DIW_<鍵的大寫>` 覆寫。設定檔中的未知鍵會讓程式拒絕啟動；其他 `DIW_` 開頭的環境變數不視為設定。
 
 | 鍵 | 預設 | 說明 |
 |---|---|---|
 | `public_url` | 必填 | 對外網址，例如 `https://diw.example.org` |
-| `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0` |
+| `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0`；未指定連接埠時採用 `PORT` |
 | `trust_forwarded` | 監聽 loopback 時為 true | 是否採用代理轉送的用戶端位址（每個位址的連線上限依此計算） |
 | `features` | `relay` | 啟用的功能，以逗號分隔 |
 | `data_dir` | `/var/lib/diw-server` | 資料目錄（原生程式庫解壓、之後的金鑰） |
@@ -123,5 +139,5 @@ S2 會加入：存取權杖（只存 SHA-256）、金鑰來源、工作階段上
 |---|---|---|
 | S1 | repo 骨架、submodule、Gradle、中繼、健康檢查、Dockerfile、compose、systemd 範例 | 錢包的 relay 測試對容器通過；`compose up` 後 `/healthz` 為 200 |
 | S2 | zkTLS 查驗主機與回執、存取權杖、金鑰管理；錢包加權杖設定 | 錢包 e2e 以容器為主機完成主動網頁證明；900 MB cgroup 內通過並記錄峰值 |
-| S3 | CI 多架構映像、release tarball、部署文件 | 在乾淨 VPS 依文件部署，Caddy 取得憑證，手機可連線 |
+| S3 | CI 映像、release tarball、部署文件（含 Cloud Run） | 在乾淨 VPS 依文件部署，Caddy 取得憑證，手機可連線；Cloud Run 部署後手機可連線 |
 | S4 | zkPDF 證明器（等 M3c） | 在大記憶體主機產生證明，手機驗證後使用 |

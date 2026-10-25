@@ -124,5 +124,8 @@ class ServerTest {
         val c = ServerConfig.load(mapOf("DIW_CONFIG" to file.path, "DIW_LISTEN_PORT" to "9100", "DIW_ZK_NATIVE" to "skip"))
         assertEquals("https://file.example.org", c.publicUrl)
         assertEquals(9100, c.listenPort)
+        // A platform's PORT applies only when the port is not set explicitly.
+        assertEquals(9000, ServerConfig.load(mapOf("DIW_CONFIG" to file.path, "PORT" to "7000")).listenPort)
+        assertEquals(7000, ServerConfig.load(mapOf("DIW_PUBLIC_URL" to "https://x", "DIW_CONFIG" to " ", "PORT" to "7000")).listenPort)
     }
 }
