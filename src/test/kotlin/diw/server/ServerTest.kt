@@ -48,6 +48,7 @@ class ServerTest {
         val info = Json.parseToJsonElement(client.get("/info").bodyAsText()).jsonObject
         assertEquals("diw-wallet-server", info["name"]!!.jsonPrimitive.content)
         assertEquals(listOf("relay"), info["features"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("https://diw.example.org", info["publicUrl"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -63,6 +64,8 @@ class ServerTest {
         b.send(Frame.Binary(true, byteArrayOf(9)))
         assertContentEquals(byteArrayOf(9), (a.incoming.receive() as Frame.Binary).readBytes())
         a.close()
+        // The other side learns that its peer left, not that a limit was hit.
+        assertEquals(Relay.PEER_LEFT.message, withTimeout(5_000) { b.closeReason.await() }?.message)
         withTimeout(5_000) { while (server.relay!!.size != 0) delay(20) }
     }
 
@@ -101,6 +104,8 @@ class ServerTest {
         // The peer is closed without receiving the frame.
         val frame = withTimeout(5_000) { b.incoming.receiveCatching().getOrNull() }
         assertTrue(frame == null || frame is Frame.Close)
+        assertEquals(Relay.LIMIT.message, withTimeout(5_000) { b.closeReason.await() }?.message)
+        assertEquals(Relay.LIMIT.message, withTimeout(5_000) { a.closeReason.await() }?.message)
     }
 
     @Test

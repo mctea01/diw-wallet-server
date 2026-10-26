@@ -41,6 +41,8 @@
 | 單一訊框 | 128 KB |
 | 每個 IP 的同時連線 | 8 |
 
+房間結束時，中繼以關閉原因告訴兩端是哪種情況，錢包據此說明是誰或哪個限制中斷了連線：`Peer left`（對方離開）、`Room limit`（超過總量或單一訊框）、`Room expired`（超過存活時間）。拒絕加入時是 `Room unavailable`（房間已滿或房數已達上限）、`Too many connections`（同一 IP 連線過多）、`Malformed room`。
+
 ### 3.2 zkTLS 查驗主機
 
 | 方法 | 路徑 | 認證 | 說明 |
@@ -182,7 +184,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 | 鍵 | 預設 | 說明 |
 |---|---|---|
-| `public_url` | 必填 | 對外網址，例如 `https://diw.example.org` |
+| `public_url` | 必填 | 對外網址，例如 `https://diw.example.org`。查驗連結、中繼與網頁查驗的網址都由它產生，必須是錢包實際連得到的名稱；`/info` 會回報它，名稱無法解析時啟動記錄會警告 |
 | `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0`；未指定連接埠時採用 `PORT` |
 | `trust_forwarded` | 監聽 loopback 時為 true | 是否採用代理轉送的用戶端位址（每個位址的連線上限依此計算） |
 | `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`zktls`、`bonds-age`、`verifier`、`twfido` |
