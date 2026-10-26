@@ -308,16 +308,18 @@ class TwdiwVerifier(
         val path = map.obj("path_nested")?.str("path") ?: fail("出示資料沒有指出卡片位置")
         val index = Regex("^\\$\\.vp\\.verifiableCredential\\[(\\d+)]$").find(path)?.groupValues?.get(1)?.toIntOrNull() ?: fail("卡片位置格式不正確")
         val card = (p.obj("vp")?.arr("verifiableCredential")?.getOrNull(index) as? JsonPrimitive)?.content ?: fail("找不到出示的卡片")
-        return if (s.ask.kind == VerifierAsk.Kind.MOICA) verifyMoica(s, card, holder) else verifyTwdiw(s, card, holder, holderKey, now)
+        return if (s.ask.kind == VerifierAsk.Kind.MOICA) verifyMoica(s, card, holder, holderKey) else verifyTwdiw(s, card, holder, holderKey, now)
     }
 
     private suspend fun verifyTwdiw(s: Session, card: String, holder: String, holderKey: EcPublicKey, now: Instant): VerifierResult {
         val parts = runCatching { SdJwtDisclosures.parse(card) }.getOrNull() ?: fail("卡片格式不正確")
         val jws = runCatching { Jws.parse(parts.issuerJwt) }.getOrNull() ?: fail("卡片格式不正確")
         val iss = jws.payload.str("iss")?.takeIf { it.startsWith("did:") } ?: fail("卡片沒有發卡者 DID")
-        val issuerKey = runCatching { resolver.resolveKey(iss, jws.header.str("kid")).key }.getOrNull() ?: fail("無法取得發卡者的金鑰")
+        // TWDIW issuers take the key from the iss DID; a kid that is not a DID URL names a key set this host does not use.
+        val kid = jws.header.str("kid")?.takeIf { it.startsWith("did:") || it.startsWith("#") }
+        val issuerKey = runCatching { resolver.resolveKey(iss, kid).key }.getOrNull() ?: fail("無法取得發卡者的金鑰")
         runCatching { jws.verify(issuerKey) }.getOrElse { fail("發卡者簽章無效") }
-        if (jws.payload.str("sub") != holder) fail("卡片不屬於出示者")
+        if (!isHolder(jws.payload.str("sub"), holder, holderKey)) fail("卡片不屬於出示者")
         jws.payload.obj("cnf")?.obj("jwk")?.let { cnf ->
             if (runCatching { EcPublicKey.fromJwk(cnf) }.getOrNull() != holderKey) fail("卡片綁定的金鑰不是出示者")
         }
@@ -354,10 +356,22 @@ class TwdiwVerifier(
         return VerifierResult(trusted && !revoked, summary, notes, fields, iss, trust.anchorName, trust.tier.name, statusLine)
     }
 
-    private suspend fun verifyMoica(s: Session, card: String, holder: String): VerifierResult {
+    /**
+     * True when [did] names the presenter. Wallets write the same key as different did:key forms (jwk_jcs-pub, the
+     * multicodec P-256 form, a JWK with another member order), so the key decides, not the string.
+     */
+    private suspend fun isHolder(did: String?, holder: String, holderKey: EcPublicKey): Boolean {
+        if (did == null) return false
+        if (did == holder) return true
+        if (!did.startsWith("did:key:") && !did.startsWith("did:jwk:")) return false
+        val key = runCatching { resolver.resolveKey(did, null).key }.getOrNull()
+        return key == VerificationKey.Ec(holderKey)
+    }
+
+    private suspend fun verifyMoica(s: Session, card: String, holder: String, holderKey: EcPublicKey): VerifierResult {
         val moica = runCatching { MoicaSignedCredential.parse(card) }.getOrNull() ?: fail("自發卡格式不正確")
         val result = runCatching { moica.verify(resolver) }.getOrElse { fail("自然人憑證簽章無法驗證") }
-        if (result.credential.obj("credentialSubject")?.str("id") != holder) fail("自發卡不屬於出示者")
+        if (!isHolder(result.credential.obj("credentialSubject")?.str("id"), holder, holderKey)) fail("自發卡不屬於出示者")
         val fields = s.ask.fields.mapNotNull { f -> result.claims[f]?.let { f to it } }
         val notes = buildList {
             add("持卡人以自然人憑證（MOICA）自行簽署，內容是持卡人的聲明，不是內政部背書")

@@ -55,19 +55,25 @@ class VerifierTest {
 
     private class Card(val issuer: EcPrivateKey, val issuerDid: String, val holder: EcPrivateKey, val holderDid: String, val compact: String)
 
-    private suspend fun card(type: String = card, claims: Map<String, String> = mapOf("name" to "王小明", "birthdate" to "0830306", "id_number" to "A123456789")): Card {
+    private suspend fun card(
+        type: String = card,
+        claims: Map<String, String> = mapOf("name" to "王小明", "birthdate" to "0830306", "id_number" to "A123456789"),
+        kid: String? = null,
+        subject: ((EcPrivateKey) -> String)? = null,
+    ): Card {
         val issuer = Crypto.createEcPrivateKey(EcCurve.P256)
         val holder = Crypto.createEcPrivateKey(EcCurve.P256)
         val issuerDid = DidKeys.didKeyJwkJcs(issuer.publicKey)
         val holderDid = DidKeys.didKeyJwkJcs(holder.publicKey)
+        val sub = subject?.invoke(holder) ?: holderDid
         val disclosures = claims.map { (k, v) ->
             buildJsonArray { add("salt-$k"); add(k); add(v) }.toString().encodeToByteArray().toBase64Url()
         }
         val holderJwk = holder.publicKey.toJwk()
         val jwt = signJws(
-            buildJsonObject { put("alg", "ES256"); put("typ", "vc+sd-jwt"); put("kid", DidKeys.verificationMethod(issuerDid)) },
+            buildJsonObject { put("alg", "ES256"); put("typ", "vc+sd-jwt"); put("kid", kid ?: DidKeys.verificationMethod(issuerDid)) },
             buildJsonObject {
-                put("iss", issuerDid); put("sub", holderDid)
+                put("iss", issuerDid); put("sub", sub)
                 put("exp", Clock.System.now().epochSeconds + 86_400)
                 putJsonObject("cnf") { put("jwk", holderJwk) }
                 putJsonObject("vc") {
@@ -167,6 +173,34 @@ class VerifierTest {
         assertEquals(listOf("name", "birthdate"), result["fields"]!!.jsonArray.map { it.jsonObject.str("name") })
         assertFalse("A123456789" in result.toString(), "a field nobody asked for is dropped")
         assertEquals(HttpStatusCode.NotFound, client.get(Url(requestUri).encodedPath).status, "an answered request is not served again")
+    }
+
+    @Test
+    fun aKeyIdOutsideTheDidAndAnotherDidKeyFormOfTheHolderAreAccepted() = testApplication {
+        var issuerDid = ""
+        application { module(server(trustOnly { issuerDid })) }
+        val did = Json.parseToJsonElement(client.get("/info").bodyAsText()).jsonObject["verifierDid"]!!.jsonPrimitive.content
+        suspend fun answer(c: Card): JsonObject {
+            issuerDid = c.issuerDid
+            val s = Json.parseToJsonElement(client.create("""{"kind":"twdiw","cardType":"$card","fields":["name"]}""").bodyAsText()).jsonObject
+            val requestUri = java.net.URLDecoder.decode(s["deepLink"]!!.jsonPrimitive.content.substringAfter("request_uri="), Charsets.UTF_8)
+            val request = Jws.parse(client.get(Url(requestUri).encodedPath).bodyAsText()).payload
+            client.post(Url(request.str("response_uri")!!).encodedPath) {
+                contentType(ContentType.Application.FormUrlEncoded); setBody(present(c, request, did).formUrlEncode())
+            }
+            return Json.parseToJsonElement(
+                client.get("/api/oidvp/sessions/${s["sessionId"]!!.jsonPrimitive.content}?token=${s["token"]!!.jsonPrimitive.content}").bodyAsText(),
+            ).jsonObject
+        }
+        // Issuers on the national platform sign with a kid that is not a DID URL; the key comes from the iss DID.
+        // The holder's own wallet may write its did:key in the multicodec P-256 form.
+        val accepted = answer(card(kid = "issuer-key-1", subject = { DidKeys.didKey(it.publicKey) }))
+        assertTrue(accepted["result"]!!.jsonObject["accepted"]!!.jsonPrimitive.content.toBoolean(), accepted.toString())
+        // Another key in that form still belongs to someone else.
+        val other = Crypto.createEcPrivateKey(EcCurve.P256)
+        val refused = answer(card(subject = { DidKeys.didKey(other.publicKey) }))
+        assertFalse(refused["result"]!!.jsonObject["accepted"]!!.jsonPrimitive.content.toBoolean(), refused.toString())
+        assertTrue("卡片不屬於出示者" in refused.toString())
     }
 
     @Test
