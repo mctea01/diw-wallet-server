@@ -41,6 +41,8 @@
 | 單一訊框 | 128 KB |
 | 每個 IP 的同時連線 | 8 |
 
+房間結束時，中繼以關閉原因告訴兩端是哪種情況，錢包據此說明是誰或哪個限制中斷了連線：`Peer left`（對方離開）、`Room limit`（超過總量或單一訊框）、`Room expired`（超過存活時間）。拒絕加入時是 `Room unavailable`（房間已滿或房數已達上限）、`Too many connections`（同一 IP 連線過多）、`Malformed room`。
+
 ### 3.2 zkTLS 查驗主機
 
 | 方法 | 路徑 | 認證 | 說明 |

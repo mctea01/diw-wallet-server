@@ -72,6 +72,8 @@ class Relay(private val limits: RelayLimits) {
             session.close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Room unavailable"))
             return
         }
+        // Why the room ends, told to both sides so a wallet can say which limit or party ended it.
+        var end = EXPIRED
         try {
             withTimeoutOrNull(limits.lifetime - (now - room.created)) {
                 val peer = if (first) {
@@ -79,33 +81,39 @@ class Relay(private val limits: RelayLimits) {
                     select {
                         room.second.onAwait { it }
                         session.closeReason.onAwait { null }
-                    } ?: return@withTimeoutOrNull
+                    } ?: run { end = PEER_LEFT; return@withTimeoutOrNull }
                 } else room.first
-                forward(session, peer, room)
+                end = forward(session, peer, room)
             }
         } finally {
             synchronized(rooms) { if (rooms[id] === room) rooms.remove(id) }
-            runCatching { session.close() }
+            runCatching { session.close(end) }
             if (room.second.isCompleted) {
                 val other = if (first) room.second.getCompleted() else room.first
-                runCatching { other.close() }
+                runCatching { other.close(end) }
             } else {
                 room.second.cancel()
             }
         }
     }
 
-    /** Copies this side's binary frames to [peer] until this side ends or the room reaches its limit. */
-    private suspend fun forward(from: DefaultWebSocketServerSession, peer: DefaultWebSocketServerSession, room: Room) {
+    /** Copies this side's binary frames to [peer] until this side ends ([PEER_LEFT]) or the room reaches a limit. */
+    private suspend fun forward(from: DefaultWebSocketServerSession, peer: DefaultWebSocketServerSession, room: Room): CloseReason {
         for (frame in from.incoming) {
             if (frame !is Frame.Binary) continue
             val data = frame.data
-            if (data.size > limits.maxFrame || room.bytes.addAndGet(data.size.toLong()) > limits.maxBytes) break
+            if (data.size > limits.maxFrame || room.bytes.addAndGet(data.size.toLong()) > limits.maxBytes) return LIMIT
             peer.send(Frame.Binary(true, data))
         }
+        return PEER_LEFT
     }
 
     companion object {
+        // The reason texts are what the wallet reads (wallet ZkTlsChannels); keep them in step.
+        val PEER_LEFT = CloseReason(CloseReason.Codes.NORMAL, "Peer left")
+        val LIMIT = CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Room limit")
+        val EXPIRED = CloseReason(CloseReason.Codes.GOING_AWAY, "Room expired")
+
         /** A room is 16 random bytes in unpadded base64url. */
         fun validRoom(id: String): Boolean = id.length == 22 &&
             runCatching { Base64.getUrlDecoder().decode(id).size == 16 }.getOrDefault(false)
