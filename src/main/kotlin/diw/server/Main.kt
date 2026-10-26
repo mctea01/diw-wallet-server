@@ -166,6 +166,8 @@ fun Application.module(server: Server) {
             val body = buildJsonObject {
                 put("name", "diw-wallet-server")
                 put("version", serverVersion)
+                // The address wallets are sent to; a wallet that reached /info elsewhere warns about the mismatch.
+                put("publicUrl", server.config.publicUrl)
                 putJsonArray("features") { server.config.features.sorted().forEach { add(JsonPrimitive(it)) } }
                 putJsonArray("native") { server.nativeBackends.forEach { add(JsonPrimitive(it)) } }
                 // The web verifier's DID, for registering it or recognising it on the holder's consent screen.
@@ -252,5 +254,13 @@ fun main(args: Array<String>) {
     server.prepare(CoroutineScope(SupervisorJob()))
     log.info("diw-wallet-server {} on {}:{} for {}, features {}, native {}", serverVersion, config.listenHost,
         config.listenPort, config.publicUrl, config.features.sorted(), server.nativeBackends)
+    // Session links, relay addresses and the web verifier's URLs are all built from public_url, so a name that does
+    // not resolve breaks every wallet connection while /info still answers at the address actually used.
+    val publicHost = java.net.URI(config.publicUrl).host
+    Thread {
+        if (runCatching { java.net.InetAddress.getAllByName(publicHost) }.isFailure) {
+            log.warn("public_url host {} does not resolve: wallets are sent to this address, set public_url to the name clients use", publicHost)
+        }
+    }.apply { isDaemon = true }.start()
     embeddedServer(Netty, port = config.listenPort, host = config.listenHost) { module(server) }.start(wait = true)
 }

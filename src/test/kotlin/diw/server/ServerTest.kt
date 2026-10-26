@@ -48,6 +48,7 @@ class ServerTest {
         val info = Json.parseToJsonElement(client.get("/info").bodyAsText()).jsonObject
         assertEquals("diw-wallet-server", info["name"]!!.jsonPrimitive.content)
         assertEquals(listOf("relay"), info["features"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("https://diw.example.org", info["publicUrl"]!!.jsonPrimitive.content)
     }
 
     @Test
