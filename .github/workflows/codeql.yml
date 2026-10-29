@@ -1,4 +1,3 @@
-
 name: CodeQL
 
 on:
@@ -32,8 +31,12 @@ jobs:
         include:
           - language: actions
             build-mode: none
+          # The Cloudflare Worker in deploy/cloudflare.
           - language: javascript-typescript
             build-mode: none
+          # The server's own Kotlin in src/. The wallet is pulled in only as a build
+          # dependency (includeBuild) and is scanned in its own repository, so its code
+          # is excluded from the results below.
           - language: java-kotlin
             build-mode: manual
 
@@ -41,7 +44,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          submodules: true
+          # Only the Kotlin build needs the wallet submodule (the included build); the
+          # other languages scan the server's own files only.
+          submodules: ${{ matrix.language == 'java-kotlin' }}
 
       - name: Set up JDK 21
         if: matrix.language == 'java-kotlin'
@@ -68,7 +73,16 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: security-extended
+          # The wallet submodule is a build dependency only and is scanned in its own
+          # repository; generated output and docs carry no findings worth reporting.
+          config: |
+            paths-ignore:
+              - wallet/**
+              - docs/**
+              - '**/build/**'
 
+      # Compiling the server also configures the included wallet build, so the Android
+      # SDK on the runner is required; the Rust native library is skipped.
       - name: Build Java/Kotlin
         if: matrix.language == 'java-kotlin'
         env:
