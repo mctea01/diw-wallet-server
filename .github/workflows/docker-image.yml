@@ -33,7 +33,7 @@ jobs:
           java-version: "21"
       # The wallet's core module has an Android target; the runner image's preinstalled SDK (ANDROID_HOME) is enough.
       # android-actions/setup-android@v3 fails with cmdline-tools 16.0, which no longer has the "tools" package.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       # Rust is on the runner image; wallet/native/rust-toolchain.toml installs the pinned version on first use.
       - name: Native build tools (protoc and libclang for OpenAC)
         run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev
