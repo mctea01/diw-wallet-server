@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
+    implementation(platform(libs.netty.bom))
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.forwarded.header)
     implementation(libs.ktor.client.java)
