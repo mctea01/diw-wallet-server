@@ -1,0 +1,57 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Asia/Taipei",
+  "labels": [
+    "dependencies"
+  ],
+  "platformAutomerge": true,
+  "automergeStrategy": "squash",
+  "rebaseWhen": "auto",
+  "vulnerabilityAlerts": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "description": "Minor, patch and digest updates merge by themselves once CI passes",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Major updates wait for approval on the Dependency Dashboard",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Shared with the wallet core built from the submodule: move together with the wallet repository",
+      "groupName": "wallet shared stack",
+      "matchPackageNames": [
+        "io.ktor:**",
+        "org.jetbrains.kotlin.**",
+        "org.jetbrains.kotlinx:**",
+        "org.bouncycastle:**"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "The Cloudflare image builds on this repository's own published image",
+      "matchPackageNames": [
+        "ghcr.io/mctea01/diw-wallet-server"
+      ],
+      "enabled": false
+    }
+  ]
+}
