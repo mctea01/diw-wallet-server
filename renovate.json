@@ -12,7 +12,11 @@
   "automergeStrategy": "squash",
   "rebaseWhen": "auto",
   "vulnerabilityAlerts": {
-    "enabled": false
+    "enabled": true,
+    "labels": [
+      "dependencies",
+      "security"
+    ]
   },
   "packageRules": [
     {
