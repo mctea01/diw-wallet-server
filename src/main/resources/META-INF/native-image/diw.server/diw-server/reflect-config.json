@@ -1,0 +1,2669 @@
+[
+  {
+    "name": "[B"
+  },
+  {
+    "name": "[Lio.ktor.network.selector.SelectInterest;"
+  },
+  {
+    "name": "[Ljava.lang.Object;"
+  },
+  {
+    "name": "[Ljava.lang.String;"
+  },
+  {
+    "name": "[Lsun.security.pkcs.SignerInfo;"
+  },
+  {
+    "name": "android.os.Build"
+  },
+  {
+    "name": "android.os.Build$VERSION"
+  },
+  {
+    "name": "com.sun.crypto.provider.AESCipher$General",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.ARCFOURCipher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.ChaCha20Cipher$ChaCha20Poly1305",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.DESCipher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.DESedeCipher",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.DHParameters",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.GaloisCounterMode$AESGCM",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.HmacCore$HmacSHA256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.HmacCore$HmacSHA384",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.PBEKeyFactory$PBEWithMD5AndDES",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.PBES2Core$HmacSHA256AndAES_256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.PBES2Parameters$General",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.PBES2Parameters$HmacSHA256AndAES_256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.TlsKeyMaterialGenerator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.TlsMasterSecretGenerator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.crypto.provider.TlsPrfGenerator$V12",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.jna.CallbackProxy",
+    "methods": [
+      {
+        "name": "callback",
+        "parameterTypes": [
+          "java.lang.Object[]"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "com.sun.jna.Pointer",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "com.sun.jna.Structure$FFIType",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.sun.jna.Structure$FFIType$size_t",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "diw.server.Relay$forward$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.server.Relay$join$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.server.Relay$serve$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.server.Relay$serve$3",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.server.RelayKt$relayRoutes$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.server.ZkTlsHost"
+  },
+  {
+    "name": "diw.server.ZkTlsHost$Created"
+  },
+  {
+    "name": "diw.server.ZkTlsHost$Created$Ok"
+  },
+  {
+    "name": "diw.server.ZkTlsHost$run$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.server.ZkTlsHostKt$zkTlsRoutes$4",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.RustBuffer",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.RustBuffer$ByValue",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceFree",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "callback",
+        "parameterTypes": [
+          "long"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkTlsChannelMethod0",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "callback",
+        "parameterTypes": [
+          "long",
+          "diw.wallet.core.zk.native.bindings.RustBuffer$ByValue",
+          "com.sun.jna.Pointer",
+          "diw.wallet.core.zk.native.bindings.UniffiRustCallStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkTlsChannelMethod1",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "callback",
+        "parameterTypes": [
+          "long",
+          "diw.wallet.core.zk.native.bindings.RustBuffer",
+          "diw.wallet.core.zk.native.bindings.UniffiRustCallStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkTlsChannelMethod2",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "callback",
+        "parameterTypes": [
+          "long",
+          "com.sun.jna.Pointer",
+          "diw.wallet.core.zk.native.bindings.UniffiRustCallStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkTlsReceiptIssuerMethod0",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkTlsRevealChooserMethod0",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "callback",
+        "parameterTypes": [
+          "long",
+          "diw.wallet.core.zk.native.bindings.RustBuffer$ByValue",
+          "diw.wallet.core.zk.native.bindings.RustBuffer",
+          "diw.wallet.core.zk.native.bindings.UniffiRustCallStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiRustCallStatus",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsChannel",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsChannel$UniffiByValue",
+    "allDeclaredFields": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsReceiptIssuer",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsReceiptIssuer$UniffiByValue",
+    "allDeclaredFields": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsRevealChooser",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsRevealChooser$UniffiByValue",
+    "allDeclaredFields": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.ZkException",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.ZkException$Internal",
+    "allDeclaredFields": true,
+    "methods": [
+      {
+        "name": "copyForStackTraceRecovery",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsChannel$close",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsChannel$receive",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsChannel$send",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsChannel$uniffiFree",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsReceiptIssuer$issue",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsReceiptIssuer$uniffiFree",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsRevealChooser$choose",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkTlsRevealChooser$uniffiFree",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zktls.WebSocketChannel$close$1$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zktls.WebSocketChannel$close$1$1$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zktls.WebSocketChannel$next$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zktls.WebSocketChannel$receive$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zktls.ZkTlsVerificationKt$cancellable$2$1$watcher$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.HttpClient",
+    "fields": [
+      {
+        "name": "closed"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.HttpClientConfig"
+  },
+  {
+    "name": "io.ktor.client.call.HttpClientCall",
+    "fields": [
+      {
+        "name": "received"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.content.ProgressListener"
+  },
+  {
+    "name": "io.ktor.client.engine.HttpClientEngineBase",
+    "fields": [
+      {
+        "name": "clientRefCount$internal"
+      },
+      {
+        "name": "closed"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.engine.HttpClientEngineCapability"
+  },
+  {
+    "name": "io.ktor.client.engine.HttpClientEngineConfig"
+  },
+  {
+    "name": "io.ktor.client.engine.java.JavaHttpResponseBodyHandler$JavaHttpResponseBodySubscriber",
+    "fields": [
+      {
+        "name": "closed"
+      },
+      {
+        "name": "subscription"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.engine.java.JavaHttpResponseBodyHandler$JavaHttpResponseBodySubscriber$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.plugins.HttpRetryDelayContext"
+  },
+  {
+    "name": "io.ktor.client.plugins.HttpRetryModifyRequestContext"
+  },
+  {
+    "name": "io.ktor.client.plugins.HttpRetryShouldRetryContext"
+  },
+  {
+    "name": "io.ktor.client.plugins.HttpSend"
+  },
+  {
+    "name": "io.ktor.client.plugins.HttpTimeoutConfig"
+  },
+  {
+    "name": "io.ktor.client.plugins.api.ClientPluginImpl"
+  },
+  {
+    "name": "io.ktor.client.plugins.api.ClientPluginInstance"
+  },
+  {
+    "name": "io.ktor.client.plugins.websocket.BuildersKt$webSocket$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.plugins.websocket.BuildersKt$webSocketSession$2",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.client.plugins.websocket.DefaultClientWebSocketSession"
+  },
+  {
+    "name": "io.ktor.client.plugins.websocket.WebSockets"
+  },
+  {
+    "name": "io.ktor.client.request.HttpRequest"
+  },
+  {
+    "name": "io.ktor.client.request.HttpRequestBuilder"
+  },
+  {
+    "name": "io.ktor.client.request.ResponseAdapter"
+  },
+  {
+    "name": "io.ktor.client.statement.HttpResponse"
+  },
+  {
+    "name": "io.ktor.http.HttpStatusCode"
+  },
+  {
+    "name": "io.ktor.http.cio.HttpParserKt$parseRequest$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.http.content.TextContent"
+  },
+  {
+    "name": "io.ktor.network.selector.InterestSuspensionsMap",
+    "fields": [
+      {
+        "name": "acceptHandlerReference"
+      },
+      {
+        "name": "connectHandlerReference"
+      },
+      {
+        "name": "readHandlerReference"
+      },
+      {
+        "name": "writeHandlerReference"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.selector.LockFreeMPSCQueue",
+    "fields": [
+      {
+        "name": "curRef"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.selector.LockFreeMPSCQueueCore",
+    "fields": [
+      {
+        "name": "nextRef"
+      },
+      {
+        "name": "stateRef"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.selector.SelectableBase",
+    "fields": [
+      {
+        "name": "_interestedOps"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.sockets.CIOReaderKt$attachForReadingDirectImpl$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.sockets.CIOWriterKt$attachForWritingDirectImpl$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.sockets.ServerSocketImpl$acceptSuspend$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.network.sockets.SocketBase",
+    "fields": [
+      {
+        "name": "actualCloseFlag"
+      },
+      {
+        "name": "closeFlag"
+      },
+      {
+        "name": "readerJob"
+      },
+      {
+        "name": "writerJob"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.application.PluginInstance"
+  },
+  {
+    "name": "io.ktor.server.cio.CIOApplicationEngine$initServerJob$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.CIOApplicationEngine$stop$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.CIOApplicationEngine$stopSuspend$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.CIOApplicationEngine$stopSuspend$result$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.backend.HttpServerKt$httpServer$acceptJob$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.backend.ServerPipelineKt$pipelineWriterLoop$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.backend.ServerPipelineKt$pipelineWriterLoop$child$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.backend.ServerPipelineKt$startServerConnectionPipeline$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.cio.backend.ServerPipelineKt$startServerPipelineWriter$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.engine.BaseApplicationResponse"
+  },
+  {
+    "name": "io.ktor.server.plugins.MutableOriginConnectionPoint"
+  },
+  {
+    "name": "io.ktor.server.request.DoubleReceivePreventionToken"
+  },
+  {
+    "name": "io.ktor.server.routing.RoutingCall"
+  },
+  {
+    "name": "io.ktor.server.routing.RoutingRoot"
+  },
+  {
+    "name": "io.ktor.server.websocket.RoutingKt__RoutingKt$handleServerSession$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.websocket.RoutingKt__RoutingKt$proceedWebSocket$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.websocket.RoutingKt__RoutingKt$webSocket$2",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.websocket.RoutingKt__RoutingKt$webSocketRaw$2$1$1$1$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.websocket.WebSocketUpgrade"
+  },
+  {
+    "name": "io.ktor.server.websocket.WebSocketUpgrade$upgrade$2",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.server.websocket.WebSockets"
+  },
+  {
+    "name": "io.ktor.util.Attributes"
+  },
+  {
+    "name": "io.ktor.util.collections.CopyOnWriteHashMap",
+    "fields": [
+      {
+        "name": "current"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.util.internal.LockFreeLinkedListNode",
+    "fields": [
+      {
+        "name": "_next"
+      },
+      {
+        "name": "_prev"
+      },
+      {
+        "name": "removedRef"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.util.reflect.TypeInfo"
+  },
+  {
+    "name": "io.ktor.utils.io.ByteChannel",
+    "fields": [
+      {
+        "name": "_closedCause"
+      },
+      {
+        "name": "closeHandler"
+      },
+      {
+        "name": "suspensionSlot"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.ByteChannel$awaitContent$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.ByteReadChannel"
+  },
+  {
+    "name": "io.ktor.utils.io.ByteReadChannelOperationsKt$internalReadLineTo$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.ByteReadChannelOperationsKt$reader$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.ByteReadChannelOperationsKt$reader$job$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.ByteReadChannelOperations_jvmKt$readAvailable$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.ByteWriteChannelOperationsKt$writer$job$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.CloseHookByteWriteChannel$flushAndClose$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.utils.io.pool.DefaultPool",
+    "fields": [
+      {
+        "name": "top"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.DefaultWebSocketSessionImpl",
+    "fields": [
+      {
+        "name": "closed"
+      },
+      {
+        "name": "pinger"
+      },
+      {
+        "name": "started"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.DefaultWebSocketSessionImpl$outgoingProcessorLoop$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.DefaultWebSocketSessionImpl$runIncomingProcessor$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.DefaultWebSocketSessionImpl$runOutgoingProcessor$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.DefaultWebSocketSessionImpl$sendCloseSequence$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.DefaultWebSocketSessionImpl$start$2",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.PingPongKt$pinger$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.PingPongKt$pinger$1$2",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.PingPongKt$ponger$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.RawWebSocketJvm$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketExtension"
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketReader$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketReader$readLoop$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketSessionKt$close$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketWriter$flush$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketWriter$writeLoop$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "io.ktor.websocket.WebSocketWriter$writeLoopJob$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "java.io.IOException",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.io.Serializable"
+  },
+  {
+    "name": "java.lang.Class",
+    "methods": [
+      {
+        "name": "getModule",
+        "parameterTypes": []
+      },
+      {
+        "name": "getPermittedSubclasses",
+        "parameterTypes": []
+      },
+      {
+        "name": "getRecordComponents",
+        "parameterTypes": []
+      },
+      {
+        "name": "isRecord",
+        "parameterTypes": []
+      },
+      {
+        "name": "isSealed",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.ClassValue"
+  },
+  {
+    "name": "java.lang.Enum"
+  },
+  {
+    "name": "java.lang.Error",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.lang.Exception",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.lang.IllegalStateException",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.lang.LinkageError",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.lang.Module",
+    "methods": [
+      {
+        "name": "getDescriptor",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Object",
+    "allDeclaredFields": true,
+    "methods": [
+      {
+        "name": "equals",
+        "parameterTypes": [
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "hashCode",
+        "parameterTypes": []
+      },
+      {
+        "name": "toString",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.RuntimeException",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.lang.String"
+  },
+  {
+    "name": "java.lang.Thread",
+    "fields": [
+      {
+        "name": "threadLocalRandomProbe"
+      }
+    ]
+  },
+  {
+    "name": "java.lang.Throwable",
+    "allDeclaredFields": true,
+    "methods": [
+      {
+        "name": "addSuppressed",
+        "parameterTypes": [
+          "java.lang.Throwable"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.UnsatisfiedLinkError",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "copyForStackTraceRecovery",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.invoke.MethodHandle",
+    "methods": [
+      {
+        "name": "bindTo",
+        "parameterTypes": [
+          "java.lang.Object"
+        ]
+      },
+      {
+        "name": "invokeWithArguments",
+        "parameterTypes": [
+          "java.lang.Object[]"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.invoke.MethodHandles",
+    "methods": [
+      {
+        "name": "lookup",
+        "parameterTypes": []
+      },
+      {
+        "name": "privateLookupIn",
+        "parameterTypes": [
+          "java.lang.Class",
+          "java.lang.invoke.MethodHandles$Lookup"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.invoke.MethodHandles$Lookup",
+    "methods": [
+      {
+        "name": "findSpecial",
+        "parameterTypes": [
+          "java.lang.Class",
+          "java.lang.String",
+          "java.lang.invoke.MethodType",
+          "java.lang.Class"
+        ]
+      },
+      {
+        "name": "in",
+        "parameterTypes": [
+          "java.lang.Class"
+        ]
+      },
+      {
+        "name": "unreflectSpecial",
+        "parameterTypes": [
+          "java.lang.reflect.Method",
+          "java.lang.Class"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.invoke.MethodType",
+    "methods": [
+      {
+        "name": "methodType",
+        "parameterTypes": [
+          "java.lang.Class",
+          "java.lang.Class[]"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.lang.module.ModuleDescriptor",
+    "methods": [
+      {
+        "name": "name",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.reflect.Method",
+    "methods": [
+      {
+        "name": "isDefault",
+        "parameterTypes": []
+      },
+      {
+        "name": "isVarArgs",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.net.StandardSocketOptions"
+  },
+  {
+    "name": "java.nio.Buffer"
+  },
+  {
+    "name": "java.nio.channels.ClosedChannelException",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "copyForStackTraceRecovery",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.security.AlgorithmParametersSpi"
+  },
+  {
+    "name": "java.security.KeyStoreSpi"
+  },
+  {
+    "name": "java.security.MessageDigestSpi"
+  },
+  {
+    "name": "java.security.SecureRandomParameters"
+  },
+  {
+    "name": "java.security.interfaces.ECPrivateKey"
+  },
+  {
+    "name": "java.security.interfaces.ECPublicKey"
+  },
+  {
+    "name": "java.security.interfaces.RSAPrivateKey"
+  },
+  {
+    "name": "java.security.interfaces.RSAPublicKey"
+  },
+  {
+    "name": "java.util.Date"
+  },
+  {
+    "name": "java.util.HashSet"
+  },
+  {
+    "name": "java.util.LinkedHashSet"
+  },
+  {
+    "name": "java.util.NoSuchElementException",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.util.concurrent.ArrayBlockingQueue"
+  },
+  {
+    "name": "java.util.concurrent.CancellationException",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "copyForStackTraceRecovery",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.ForkJoinTask",
+    "fields": [
+      {
+        "name": "aux"
+      },
+      {
+        "name": "status"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.ScheduledThreadPoolExecutor",
+    "methods": [
+      {
+        "name": "setRemoveOnCancelPolicy",
+        "parameterTypes": [
+          "boolean"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.AtomicBoolean",
+    "fields": [
+      {
+        "name": "value"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.AtomicReference",
+    "fields": [
+      {
+        "name": "value"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.atomic.Striped64",
+    "fields": [
+      {
+        "name": "base"
+      },
+      {
+        "name": "cellsBusy"
+      }
+    ]
+  },
+  {
+    "name": "java.util.concurrent.locks.AbstractOwnableSynchronizer"
+  },
+  {
+    "name": "java.util.concurrent.locks.AbstractQueuedSynchronizer"
+  },
+  {
+    "name": "java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject"
+  },
+  {
+    "name": "java.util.concurrent.locks.ReentrantLock"
+  },
+  {
+    "name": "java.util.concurrent.locks.ReentrantLock$NonfairSync"
+  },
+  {
+    "name": "java.util.concurrent.locks.ReentrantLock$Sync"
+  },
+  {
+    "name": "javax.security.auth.x500.X500Principal",
+    "fields": [
+      {
+        "name": "thisX500Name"
+      }
+    ],
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "sun.security.x509.X500Name"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "jdk.internal.misc.Unsafe"
+  },
+  {
+    "name": "kotlin.Any"
+  },
+  {
+    "name": "kotlin.Boolean"
+  },
+  {
+    "name": "kotlin.Cloneable"
+  },
+  {
+    "name": "kotlin.Function2"
+  },
+  {
+    "name": "kotlin.Function3"
+  },
+  {
+    "name": "kotlin.Int"
+  },
+  {
+    "name": "kotlin.Long"
+  },
+  {
+    "name": "kotlin.Metadata",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "methods": [
+      {
+        "name": "bv",
+        "parameterTypes": []
+      },
+      {
+        "name": "d1",
+        "parameterTypes": []
+      },
+      {
+        "name": "d2",
+        "parameterTypes": []
+      },
+      {
+        "name": "k",
+        "parameterTypes": []
+      },
+      {
+        "name": "mv",
+        "parameterTypes": []
+      },
+      {
+        "name": "pn",
+        "parameterTypes": []
+      },
+      {
+        "name": "xi",
+        "parameterTypes": []
+      },
+      {
+        "name": "xs",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "kotlin.SafePublicationLazyImpl",
+    "fields": [
+      {
+        "name": "_value"
+      }
+    ]
+  },
+  {
+    "name": "kotlin.String"
+  },
+  {
+    "name": "kotlin.Throwable"
+  },
+  {
+    "name": "kotlin.Unit"
+  },
+  {
+    "name": "kotlin.annotation.MustBeDocumented",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "kotlin.annotation.Retention",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "kotlin.annotation.Target",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "kotlin.collections.List"
+  },
+  {
+    "name": "kotlin.collections.Map"
+  },
+  {
+    "name": "kotlin.coroutines.jvm.internal.BaseContinuationImpl"
+  },
+  {
+    "name": "kotlin.jvm.internal.DefaultConstructorMarker"
+  },
+  {
+    "name": "kotlin.reflect.jvm.internal.ReflectionFactoryImpl",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.AwaitAll",
+    "fields": [
+      {
+        "name": "notCompletedCount$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.AwaitAll$AwaitAllNode",
+    "fields": [
+      {
+        "name": "_disposer$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.AwaitKt$joinAll$3",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.CancellableContinuationImpl",
+    "fields": [
+      {
+        "name": "_decisionAndIndex$volatile"
+      },
+      {
+        "name": "_parentHandle$volatile"
+      },
+      {
+        "name": "_state$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.CancelledContinuation",
+    "fields": [
+      {
+        "name": "_resumed$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.CompletedExceptionally",
+    "fields": [
+      {
+        "name": "_handled$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.DelayKt$awaitCancellation$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.DispatchedCoroutine",
+    "fields": [
+      {
+        "name": "_decision$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.EventLoopImplBase",
+    "fields": [
+      {
+        "name": "_delayed$volatile"
+      },
+      {
+        "name": "_isCompleted$volatile"
+      },
+      {
+        "name": "_queue$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.InvokeOnCancelling",
+    "fields": [
+      {
+        "name": "_invoked$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.JobSupport",
+    "fields": [
+      {
+        "name": "_parentHandle$volatile"
+      },
+      {
+        "name": "_state$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.JobSupport$Finishing",
+    "fields": [
+      {
+        "name": "_exceptionsHolder$volatile"
+      },
+      {
+        "name": "_isCompleting$volatile"
+      },
+      {
+        "name": "_rootCause$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.TimeoutKt$withTimeoutOrNull$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.channels.BufferedChannel",
+    "fields": [
+      {
+        "name": "_closeCause$volatile"
+      },
+      {
+        "name": "bufferEnd$volatile"
+      },
+      {
+        "name": "bufferEndSegment$volatile"
+      },
+      {
+        "name": "closeHandler$volatile"
+      },
+      {
+        "name": "completedExpandBuffersAndPauseFlag$volatile"
+      },
+      {
+        "name": "receiveSegment$volatile"
+      },
+      {
+        "name": "receivers$volatile"
+      },
+      {
+        "name": "sendSegment$volatile"
+      },
+      {
+        "name": "sendersAndCloseStatus$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.channels.BufferedChannel$receiveCatching$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.channels.BufferedChannel$receiveCatchingOnNoWaiterSuspend$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.channels.ClosedReceiveChannelException",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "copyForStackTraceRecovery",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.channels.ClosedSendChannelException",
+    "allDeclaredFields": true,
+    "queryAllPublicConstructors": true,
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "copyForStackTraceRecovery",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.ConcurrentLinkedListNode",
+    "fields": [
+      {
+        "name": "_next$volatile"
+      },
+      {
+        "name": "_prev$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.DispatchedContinuation",
+    "fields": [
+      {
+        "name": "_reusableCancellableContinuation$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.LimitedDispatcher",
+    "fields": [
+      {
+        "name": "runningWorkers$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.LockFreeLinkedListNode",
+    "fields": [
+      {
+        "name": "_next$volatile"
+      },
+      {
+        "name": "_prev$volatile"
+      },
+      {
+        "name": "_removedRef$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.LockFreeTaskQueue",
+    "fields": [
+      {
+        "name": "_cur$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.LockFreeTaskQueueCore",
+    "fields": [
+      {
+        "name": "_next$volatile"
+      },
+      {
+        "name": "_state$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.Segment",
+    "fields": [
+      {
+        "name": "cleanedAndPointers$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.internal.StackTraceRecoveryKt"
+  },
+  {
+    "name": "kotlinx.coroutines.internal.ThreadSafeHeap",
+    "fields": [
+      {
+        "name": "_size$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.scheduling.CoroutineScheduler",
+    "fields": [
+      {
+        "name": "_isTerminated$volatile"
+      },
+      {
+        "name": "controlState$volatile"
+      },
+      {
+        "name": "parkedWorkersStack$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.scheduling.CoroutineScheduler$Worker",
+    "fields": [
+      {
+        "name": "workerCtl$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.scheduling.WorkQueue",
+    "fields": [
+      {
+        "name": "blockingTasksInBuffer$volatile"
+      },
+      {
+        "name": "consumerIndex$volatile"
+      },
+      {
+        "name": "lastScheduledTask$volatile"
+      },
+      {
+        "name": "producerIndex$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.selects.SelectImplementation",
+    "fields": [
+      {
+        "name": "state$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.selects.SelectImplementation$doSelectSuspend$1",
+    "fields": [
+      {
+        "name": "label"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.sync.MutexImpl",
+    "fields": [
+      {
+        "name": "owner$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.coroutines.sync.SemaphoreAndMutexImpl",
+    "fields": [
+      {
+        "name": "_availablePermits$volatile"
+      },
+      {
+        "name": "deqIdx$volatile"
+      },
+      {
+        "name": "enqIdx$volatile"
+      },
+      {
+        "name": "head$volatile"
+      },
+      {
+        "name": "tail$volatile"
+      }
+    ]
+  },
+  {
+    "name": "kotlinx.io.Source"
+  },
+  {
+    "name": "long",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "sun.security.pkcs12.PKCS12KeyStore",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.pkcs12.PKCS12KeyStore$DualFormatPKCS12",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.DSA$SHA224withDSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.DSA$SHA256withDSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.JavaKeyStore$DualFormatJKS",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.JavaKeyStore$JKS",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.NativePRNG",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.security.SecureRandomParameters"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.NativePRNG$NonBlocking",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.security.SecureRandomParameters"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA2$SHA224",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA2$SHA256",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA5$SHA384",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SHA5$SHA512",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.SecureRandom",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      },
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.security.SecureRandomParameters"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.X509Factory",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.provider.certpath.PKIXCertPathValidator",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.PSSParameters",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSAKeyFactory$Legacy",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSAKeyPairGenerator$Legacy",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSAPSSSignature",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSASignature$SHA224withRSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.rsa.RSASignature$SHA256withRSA",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.KeyManagerFactoryImpl$SunX509",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.SSLContextImpl$DefaultSSLContext",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.SSLContextImpl$TLS12Context",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.ssl.TrustManagerFactoryImpl$PKIXFactory",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "sun.security.util.ObjectIdentifier"
+  },
+  {
+    "name": "sun.security.x509.AuthorityInfoAccessExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.AuthorityKeyIdentifierExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.BasicConstraintsExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.CRLDistributionPointsExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.CertificateExtensions"
+  },
+  {
+    "name": "sun.security.x509.CertificatePoliciesExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.ExtendedKeyUsageExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.IssuerAlternativeNameExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.KeyUsageExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.NetscapeCertTypeExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.PrivateKeyUsageExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.SubjectAlternativeNameExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sun.security.x509.SubjectKeyIdentifierExtension",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": [
+          "java.lang.Boolean",
+          "java.lang.Object"
+        ]
+      }
+    ]
+  }
+]

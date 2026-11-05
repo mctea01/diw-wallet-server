@@ -23,7 +23,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
+import io.ktor.server.cio.CIO
 import io.ktor.server.plugins.forwardedheaders.XForwardedHeaders
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -262,5 +262,5 @@ fun main(args: Array<String>) {
             log.warn("public_url host {} does not resolve: wallets are sent to this address, set public_url to the name clients use", publicHost)
         }
     }.apply { isDaemon = true }.start()
-    embeddedServer(Netty, port = config.listenPort, host = config.listenHost) { module(server) }.start(wait = true)
+    embeddedServer(CIO, port = config.listenPort, host = config.listenHost) { module(server) }.start(wait = true)
 }

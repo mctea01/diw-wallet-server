@@ -26,7 +26,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.websocket.close
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
+import io.ktor.server.cio.CIO
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -199,7 +199,7 @@ class ZkTlsHostTest {
             val port = ServerSocket(0).use { it.localPort }
             val url = "http://localhost:$port"
             val server = server(config(url, extra = mapOf("zktls_templates_file" to packFile(target.port).path)), listOf(target.caDer), available = null)
-            val engine = embeddedServer(Netty, port = port, host = "127.0.0.1") { module(server) }.start(wait = false)
+            val engine = embeddedServer(CIO, port = port, host = "127.0.0.1") { module(server) }.start(wait = false)
             val http = HttpClient(Java)
             try {
                 val created = http.post("$url/zktls/sessions") {

@@ -12,8 +12,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
-import io.ktor.server.netty.NettyApplicationEngine
+import io.ktor.server.cio.CIO
+import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
@@ -67,8 +67,8 @@ class TwFidoHostTest {
         val signData = ConcurrentHashMap<String, ByteArray>()
         val polls = ConcurrentHashMap<String, Int>()
         @Volatile var forgeChecksum = false
-        val engine: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration> =
-            embeddedServer(Netty, port = port, host = "127.0.0.1") {
+        val engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> =
+            embeddedServer(CIO, port = port, host = "127.0.0.1") {
                 routing {
                     for (path in listOf(TwFidoClient.PATH_PUSH, TwFidoClient.PATH_APP2APP)) post("/$path") {
                         val o = Json.parseToJsonElement(call.receiveText()).jsonObject
