@@ -47,10 +47,12 @@ DIW_PUBLIC_URL=https://diw.example.org
 # DIW_ZKTLS_CONCURRENT=1
 # Local signed template pack instead of the project's release (still checked against the pinned key).
 # DIW_ZKTLS_TEMPLATES_FILE=
+# PEM public keys also accepted for template packs (a private pack); wallets still take pages only from their own pack outside the test environment.
+# DIW_ZKTLS_TEMPLATE_KEYS_FILE=
 # PEM file of extra server roots accepted for proved pages (an intranet or test host).
 # DIW_ZKTLS_EXTRA_ROOTS_FILE=
 
-# --- Signing key (zktls and federation) ---
+# --- Keys (zktls signing key; signing_generate also covers the federation key) ---
 # PEM file with the signing key and its chain; defaults to data_dir/signing.pem.
 # DIW_SIGNING_KEY_FILE=
 # The same PEM inline, \n for line breaks (a platform secret); wins over the file. Secret.

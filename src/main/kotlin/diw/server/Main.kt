@@ -88,15 +88,13 @@ class Server(
     val bondsAge: BondsAge? = if (ServerConfig.FEATURE_BONDS_AGE !in config.features) null else
         BondsAge(config.publicUrl, config.bondsAge, DidResolver(http), this.didTrust) { nativeAgeVerifier }
 
-    /** The key that signs zkTLS requests and receipts; only the zktls feature needs it. */
-    val signing: SigningIdentity? = if (ServerConfig.FEATURE_ZKTLS !in config.features) null else runBlocking {
-        SigningIdentity.load(config.signingKeyFile ?: File(config.dataDir, "signing.pem"), config.publicUrl, config.signingGenerate, config.signingKeyPem)
-    }
-
-    val templates: ZkTemplates? = if (signing == null) null else
-        ZkTemplates(http, config.dataDir, config.zkTlsTemplatesFile, templateKeys ?: ZkTemplatePack.trustedKeys())
-
-    private val tlsn = zkTlsAvailable ?: (ZkBackend.TLSN in native)
+    /** Keys from zktls_template_keys_file, accepted for template packs besides the release key. */
+    private val extraTemplateKeys: List<EcPublicKey> = config.zkTlsTemplateKeysFile?.let { file ->
+        require(file.isFile) { "zktls_template_keys_file not found: ${file.path}" }
+        Regex("-----BEGIN PUBLIC KEY-----[\\s\\S]+?-----END PUBLIC KEY-----").findAll(file.readText())
+            .map { EcPublicKey.fromPem(it.value) }.toList()
+            .also { require(it.isNotEmpty()) { "zktls_template_keys_file holds no public key" } }
+    }.orEmpty()
 
     /** Roots from zktls_extra_roots_file (an intranet or test page), read once at start. */
     private val extraRoots: List<ByteArray> = config.zkTlsExtraRootsFile?.let { file ->
@@ -105,6 +103,16 @@ class Server(
             .map { org.multipaz.crypto.X509Cert.fromPem(it.value).encoded.toByteArray() }.toList()
             .also { require(it.isNotEmpty()) { "zktls_extra_roots_file holds no certificate" } }
     }.orEmpty()
+
+    /** The key that signs zkTLS requests and receipts; only the zktls feature needs it. */
+    val signing: SigningIdentity? = if (ServerConfig.FEATURE_ZKTLS !in config.features) null else runBlocking {
+        SigningIdentity.load(config.signingKeyFile ?: File(config.dataDir, "signing.pem"), config.publicUrl, config.signingGenerate, config.signingKeyPem)
+    }
+
+    val templates: ZkTemplates? = if (signing == null) null else
+        ZkTemplates(http, config.dataDir, config.zkTlsTemplatesFile, (templateKeys ?: ZkTemplatePack.trustedKeys()) + extraTemplateKeys)
+
+    private val tlsn = zkTlsAvailable ?: (ZkBackend.TLSN in native)
 
     val zkTls: ZkTlsHost? = signing?.let { id ->
         ZkTlsHost(config.publicUrl, id, config.zkTls, { BuiltInAnchors.all.map { it.certificate.encoded.toByteArray() }.distinct() + zkTlsRoots + extraRoots }) { tlsn }

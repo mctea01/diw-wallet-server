@@ -106,6 +106,8 @@ tasks.jar {
 
 tasks.test {
     useJUnitPlatform()
+    // -Pdiw.nativeServer=build/native/nativeCompile/diw-server runs the zkTLS end-to-end test against the native image.
+    (findProperty("diw.nativeServer") as String?)?.let { systemProperty("diw.nativeServer", file(it).absolutePath) }
     jvmArgs("-Dfile.encoding=UTF-8")
     testLogging { events("passed", "failed", "skipped") }
 }

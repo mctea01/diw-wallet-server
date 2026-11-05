@@ -64,6 +64,8 @@ data class ServerConfig(
     val zkTlsTokenHashes: List<ByteArray> = emptyList(),
     /** A local template pack to offer instead of the project's release (for an offline host). */
     val zkTlsTemplatesFile: File? = null,
+    /** Public keys (PEM) accepted for template packs besides the project's release key. */
+    val zkTlsTemplateKeysFile: File? = null,
     /** Extra server roots (PEM) accepted for proved pages, for an intranet or test host. */
     val zkTlsExtraRootsFile: File? = null,
     /** The PEM file holding the key that signs zkTLS requests and receipts, and its chain; null keeps it in the data directory. */
@@ -121,6 +123,7 @@ data class ServerConfig(
             "zktls_per_address" to zkTls.perAddress.toString(),
             "zktls_concurrent" to zkTls.concurrent.toString(),
             "zktls_templates_file" to zkTlsTemplatesFile?.path,
+            "zktls_template_keys_file" to zkTlsTemplateKeysFile?.path,
             "zktls_extra_roots_file" to zkTlsExtraRootsFile?.path,
             "signing_key_file" to signingKeyFile?.path,
             "signing_key_pem" to secret(signingKeyPem),
@@ -328,6 +331,7 @@ data class ServerConfig(
                 ),
                 zkTlsTokenHashes = tokenHashes,
                 zkTlsTemplatesFile = str("zktls_templates_file")?.let { File(it) },
+                zkTlsTemplateKeysFile = str("zktls_template_keys_file")?.let { File(it) },
                 zkTlsExtraRootsFile = str("zktls_extra_roots_file")?.let { File(it) },
                 signingKeyFile = str("signing_key_file")?.let { File(it) },
                 signingGenerate = bool("signing_generate", true),

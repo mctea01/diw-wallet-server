@@ -4,7 +4,13 @@
       "name": "byte[]"
     },
     {
+      "name": "java.lang.AssertionError"
+    },
+    {
       "name": "java.lang.Enum"
+    },
+    {
+      "name": "java.lang.Error"
     },
     {
       "name": "java.lang.Exception"

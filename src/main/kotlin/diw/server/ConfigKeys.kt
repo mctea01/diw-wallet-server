@@ -48,9 +48,10 @@ object ConfigKeys {
             ConfigKey("zktls_per_address", "4", "Sessions from one client address."),
             ConfigKey("zktls_concurrent", "1", "Verifications running at once."),
             ConfigKey("zktls_templates_file", null, "Local signed template pack instead of the project's release (still checked against the pinned key)."),
+            ConfigKey("zktls_template_keys_file", null, "PEM public keys also accepted for template packs (a private pack); wallets still take pages only from their own pack outside the test environment."),
             ConfigKey("zktls_extra_roots_file", null, "PEM file of extra server roots accepted for proved pages (an intranet or test host)."),
         ),
-        "Signing key (zktls and federation)" to listOf(
+        "Keys (zktls signing key; signing_generate also covers the federation key)" to listOf(
             ConfigKey("signing_key_file", null, "PEM file with the signing key and its chain; defaults to data_dir/signing.pem."),
             ConfigKey("signing_key_pem", null, "The same PEM inline, \\n for line breaks (a platform secret); wins over the file.", secret = true),
             ConfigKey("signing_generate", "true", "Make missing keys on the first start; set false where the disk is not kept."),
