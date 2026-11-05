@@ -1,6 +1,6 @@
 # Experimental image with the GraalVM native executable instead of the JVM distribution: build it first with
 # GRAALVM_HOME set and ./gradlew nativeCompile (CI does this). Same settings, platform and volume as Dockerfile; it
-# starts in tens of milliseconds and idles at about 60 MB. The JVM image stays the default.
+# answers /healthz about 0.2 s after start and idles near 80 MB (relay only). The JVM image stays the default.
 FROM ubuntu:24.04
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \

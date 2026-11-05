@@ -1,6 +1,6 @@
 # DIW 正式服務端設計（diw-wallet-server）
 
-狀態：S1 至 S3 已實作（中繼、zkTLS 查驗主機與回執、存取權杖、金鑰管理、附執行環境的發行檔、容器、systemd、Cloud Run、Cloudflare Containers），Bonds 年齡查驗主機、網頁查驗端與行動自然人憑證簽署（TWFIDO SP）已實作（可選功能）；S3 的實機部署驗收待使用者執行。S4（zkPDF 證明器）為設計。
+狀態：S1 至 S3 已實作（中繼、zkTLS 查驗主機與回執、存取權杖、金鑰管理、附執行環境的發行檔、容器、systemd、Cloud Run、Cloudflare Containers），Bonds 年齡查驗主機、網頁查驗端與行動自然人憑證簽署（TWFIDO SP）已實作（可選功能）；S3 的實機部署驗收待使用者執行。2026-11-05 加入：所有部署共用一份設定檔與設定摘要（5.5）、OpenID Federation（4.1）、GraalVM 原生執行檔（實驗，5.6）。S4（zkPDF 證明器）為設計。
 
 ## 1. 目的與範圍
 
@@ -17,10 +17,11 @@
 | 網頁查驗端 | v1（可選） | `/verify` 網頁與 `/api/oidvp/*`，以官方查驗端的方言向政府數位憑證皮夾請求卡片，也可查驗 Bonds 自然人憑證自發卡 | 可 |
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
 | 行動自然人憑證簽署 | v1（可選） | `/twfido/sign`，以服務端的 SP 帳號向內政部要求簽署，SP 金鑰不放進 App | 可 |
+| 信任聯盟 | v1（可選） | `/.well-known/openid-federation`，OpenID Federation 1.0 的 Entity Configuration；可當上級（`/federation/fetch`、`/federation/list`） | 可 |
 
 ## 2. 技術選擇
 
-- Kotlin 2.2.21、Ktor 3.3.3（Netty）、JVM 21，與錢包一致。
+- Kotlin 2.2.21、Ktor 3.3.3（CIO 引擎）、JVM 21，與錢包一致。2026-11-05 由 Netty 改為 CIO：Ktor 在 GraalVM native image 只支援 CIO，兩種執行方式因此共用同一份程式。
 - 不用 Rust 重寫：zkTLS 查驗、描述檔檢查與回執簽發都在錢包的 `core`（`ZkTlsVerification`、`ZkTlsCheck`、`WebProofCredentials`）。重寫一份會讓兩邊的協定逐漸分歧。
 - `core` 的引用方式：錢包 repo 以 git submodule 釘選在指定 commit，用 Gradle composite build 建置。升級時改 submodule 指標，CI 驗證通過才發佈。
 - 原生程式庫：在 CI 以錢包的 `native/build.sh` 建出 linux-x86_64 的 `tlsn` 版本（錢包的 `ZkNative` 目前只載入 linux-x86_64，arm64 主機要等錢包支援）。VPS 不編譯 Rust。
@@ -64,7 +65,7 @@
 ### 3.3 健康與資訊
 
 - `GET /healthz`：程序與原生程式庫都正常時回 200，供容器與 systemd 檢查。
-- `GET /info`：版本、啟用的功能、原生程式庫的後端，以及 `signing`（根憑證主體、`rootSha256` 與根憑證 PEM，供使用者在錢包內比對後加入信任）與 `templatesVersion`。
+- `GET /info`：版本、啟用的功能、原生程式庫的後端，以及 `signing`（根憑證主體、`rootSha256` 與根憑證 PEM，供使用者在錢包內比對後加入信任）與 `templatesVersion`。另有 `settingsSha256`（設定摘要，5.5）、`platform`，啟用 `federation` 時有 `federation`（`entityId`、`authorityHints`、`superior`）。
 
 ### 3.4 錢包端的修改（在錢包 repo，已實作）
 
@@ -74,6 +75,9 @@
 - 同一次確認也信任網頁查驗端的 DID（`/info` 的 `verifierDid`）：加入錢包的使用者信任 DID（只有查驗方角色，T2），持卡人出示給這台服務端時不再顯示 T3。DID 只由使用者輸入的網址與 TLS 確認，沒有另外的指紋。
 - 服務端換鑰或換查驗端 DID 時，錢包不自動接受，需使用者重新確認。
 - 實作：錢包的 `ServerModel`（讀取 `/info`、自行計算指紋並與服務端回報的比對、以 `server:<host>` 來源加入查驗方與發行者兩個角色的使用者錨點，換鑰時移除舊錨點）、設定的「零知識證明」頁「正式服務端」區塊（網址、權杖、加入信任與換鑰警示），`ZkTlsFlow` 只對設定的服務端帶 `Authorization: Bearer`。
+- 設定分享（2026-11-05）：`diw-server://v1?c=<base64url JSON>`，鍵為 `url`、`name`、`root`（簽章根憑證 SHA-256）、`did`、`fed`（Entity Identifier）、`features`、`token`（只在分享者勾選時）。錢包以 QR Code 或連結分享（`core` 的 `ServerShare`），匯入後讀 `/info`，根憑證或 DID 與分享的不同就拒絕，相同才詢問是否信任。
+- 信任聯盟（2026-11-05）：服務端 `/info` 有 `federation.entityId` 時，錢包以使用者加入的 OpenID Federation Trust Anchor 解析信任鏈（實體類型 `diw_wallet_server`），中繼資料的 `signing_root_sha256` 與 `verifier_did` 都和服務端回報的相同時，在確認畫面註明由聯盟確認；不同時拒絕。
+- 兩方的服務端（2026-11-05）：只需一方有服務端。網站查驗的查驗方在每個中繼開一個房間（自己的與掃描到的對方服務端，最多 3 個，`ZkTlsEngine.open(lan, relayUrls)`），請求列出所有房間；出示方依設定 `serverPolicy`（`prefer_own` 預設、`prefer_peer`、`own_only`）排序，`own_only` 不走其他服務端的中繼。出示方可在同意畫面顯示自己的服務端 QR Code（不含權杖），查驗方掃描後以同樣的欄位重新產生請求。年齡查驗的查驗方依同一設定在兩台中選一台當主機。對方的服務端只用在當次查驗，不加入信任、不儲存。
 
 ### 3.5 Bonds 年齡查驗主機（`bonds-age`）
 
@@ -136,78 +140,66 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 存取權杖：設定只存 SHA-256（`diw-server hash-token` 由標準輸入讀權杖，至少 16 字元），比對採固定時間比較；可列多個以便輪換。
 - 金鑰、權杖與憑證從不寫入 log。
 
+### 4.1 信任聯盟（`federation`）
+
+- 依 OpenID Federation 1.0：`/.well-known/openid-federation` 回應以聯盟金鑰（P-256，ES256）簽署的 Entity Configuration（`typ` 為 `entity-statement+jwt`），效期 `federation_lifetime_hours`（預設 24 小時）。
+- 中繼資料：`federation_entity`（`organization_name`、`homepage_uri`，當上級時加 `federation_fetch_endpoint` 與 `federation_list_endpoint`）與自訂實體類型 `diw_wallet_server`（`signing_root_sha256`、`verifier_did`、`features`、`settings_sha256`）。`authority_hints` 與 `trust_marks` 由設定提供。
+- 聯盟金鑰與簽章金鑰分開：`federation_key_pem`、`federation_key_file`（預設 `data_dir/federation.pem`），或依 `signing_generate` 自動產生；`diw-server federation-jwks` 印出公鑰交給上級。
+- 上級：`federation_subordinates_file`（JSON，每個下級的 `entity_id`、`jwks`、可選的 `metadata_policy`、`metadata`、`constraints`、`entity_types`），檔案修改時間改變就重新讀取。`/federation/fetch?sub=` 回應下級的 Subordinate Statement，`/federation/list` 列出下級（可依 `entity_type` 過濾）。`diw-server federation-enroll <entity_id>` 讀取並驗證下級的 Entity Configuration，印出要加入的項目。
+- 錢包端的解析沿用 `core` 的 `FederationResolver`（與 OpenID4VP 的 `openid_federation:` 查驗方相同）；測試以兩台服務端（下級與 Trust Anchor）互相解析。
+
 ## 5. 部署
 
 自架主機時 TLS 由 Caddy 自動處理：自動申請與更新 Let's Encrypt 憑證、自動轉址 HTTPS、代理 WebSocket。不需要互動式 console。部署方式有四種：容器、不用容器、Cloud Run、Cloudflare Containers。
 
 ### 5.1 容器（建議）
 
-- CI 建出映像 `ghcr.io/<owner>/diw-wallet-server:<version>`：Ubuntu 24.04 基底，內含 jlink 精簡的 Java 21 執行環境與原生程式庫，以非 root 使用者執行。目前只有 amd64：錢包的原生程式庫只提供 linux-x86_64。
+- CI 建出映像 `ghcr.io/<owner>/diw-wallet-server:<version>`：Ubuntu 24.04 基底，內含 jlink 精簡的 Java 21 執行環境與原生程式庫，以非 root 使用者執行，`DIW_PLATFORM=container`。目前只有 amd64：錢包的原生程式庫只提供 linux-x86_64。
 - 映像建置時跑一次服務產生 AppCDS 類別快取（`JDK_JAVA_OPTIONS=-XX:SharedArchiveFile=...`）。實測從啟動到 `/healthz` 可回應由 1.5 秒降為 0.8 秒，啟動後 RSS 由 153 MB 降為 103 MB（4 核心開發機，只開中繼）。
-- `compose.yaml` 包含 `server` 與 `caddy` 兩個服務：
-  - `restart: unless-stopped`；
-  - `healthcheck` 打 `/healthz`；
-  - 資料目錄與 Caddy 憑證目錄各用一個 volume；
-  - 只對外開 80 與 443。
-- 使用者只需填 `.env`：網域、ACME 聯絡信箱、存取權杖。之後執行 `docker compose up -d`。
+- `compose.yaml` 包含 `server` 與 `caddy` 兩個服務，兩者都以 `env_file` 讀 `./server.conf`（Caddy 只用 `DIW_PUBLIC_URL` 與 `DIW_ACME_EMAIL`）；`restart: unless-stopped`、`healthcheck` 打 `/healthz`、資料目錄與 Caddy 憑證目錄各用一個 volume、只對外開 80 與 443。`.env` 只剩映像版本、記憶體上限與 `JAVA_OPTS`。
 
 ### 5.2 不用容器
 
 - Release 附 `diw-server-<version>.tar`（`./gradlew distTar`）：jlink 精簡的 Java 21（`runtime/`，含 CDS 基礎快取）、程式 jar、原生程式庫與 `deploy/` 下所有範例。在 x86_64 Linux 建置時，發行檔（`installDist`、`distTar`）一律包含 `runtime/`，映像也直接取用；啟動腳本在未設 `JAVA_HOME` 時使用 `runtime/`。其他平台建置時不附執行環境。
-- systemd 範例以 `-XX:+AutoCreateSharedArchive` 在資料目錄建立類別快取，升級後自動重建。
-- 以 systemd 管理：`Restart=on-failure`、`MemoryMax`、`DynamicUser` 或專用帳號、`StateDirectory`，log 寫進 journald。
-- Caddy 用發行版套件安裝，同樣自動處理憑證。
+- systemd 範例以 `-XX:+AutoCreateSharedArchive` 在資料目錄建立類別快取，升級後自動重建。設定讀 `/etc/diw-server/server.conf`，Caddy 以 `EnvironmentFile` 讀同一份。
+- 以 systemd 管理：`Restart=on-failure`、`MemoryMax`、`DynamicUser`、`StateDirectory`、`ConfigurationDirectory`，log 寫進 journald。
 
 ### 5.3 Cloud Run
 
-- 用同一個映像，以 `deploy/cloudrun/service.yaml` 部署。Cloud Run 終止 TLS，不需要 Caddy。
+- 用同一個映像，以 `deploy/cloudrun/service.yaml` 部署，`DIW_PLATFORM=cloudrun`。Cloud Run 終止 TLS，不需要 Caddy。
+- 設定：整份 `server.conf` 存成 Secret Manager 的 `diw-server-conf`，掛載為 `/etc/diw-server/server.conf`。金鑰以 `DIW_SIGNING_KEY_PEM=...`（一行，`\n` 表示換行）寫在檔內。
 - 平台以 `PORT` 告知監聽連接埠；設定檔與 `DIW_LISTEN_PORT` 都未指定時才採用。
-- 執行個體上限 1：中繼與之後的查驗工作階段都在記憶體中，兩端必須連到同一個執行個體。下限 0，閒置不計費。
-- 請求逾時設為 3600 秒（平台上限），涵蓋中繼房間的 15 分鐘。
-- `trust_forwarded=true`：容器只能經由 Google 前端連入，`X-Forwarded-For` 可信。
-- 資料目錄在 `/tmp`（記憶體檔案系統，計入記憶體），重啟即消失。簽章金鑰不能自動產生在這裡，否則每次冷啟動都換鑰：`service.yaml` 以 Secret Manager 的 `diw-signing-key` 提供 `DIW_SIGNING_KEY_PEM`，並設 `signing_generate=false`。
-- 記憶體上限 1 GiB、`-Xmx384m`，涵蓋一次 zkTLS 查驗。
-- 映像經 Artifact Registry 遠端存放區代理 ghcr.io。
+- 執行個體上限 1：中繼與查驗工作階段都在記憶體中，兩端必須連到同一個執行個體。下限 0，閒置不計費。請求逾時 3600 秒（平台上限），涵蓋中繼房間的 15 分鐘。
+- 平台預設：監聽 `0.0.0.0`、`trust_forwarded=true`（容器只能經由 Google 前端連入）、資料目錄 `/tmp/diw-server`（記憶體檔案系統，重啟即消失）、`signing_generate=false`（否則每次冷啟動都換鑰）。
+- 記憶體上限 1 GiB、`-Xmx384m`，涵蓋一次 zkTLS 查驗。映像經 Artifact Registry 遠端存放區代理 ghcr.io。
 
 ### 5.4 Cloudflare Containers
 
-- 用同一個映像。`deploy/cloudflare/` 的 Worker 把每個請求轉到名為 `main` 的單一容器執行個體（Durable Object 加 `@cloudflare/containers`，`max_instances` 為 1），WebSocket 直接轉送。
-- Worker 以 `CF-Connecting-IP` 覆寫 `X-Forwarded-For`（不附加，避免用戶端自選位址），容器設 `trust_forwarded=true`。
-- 磁碟不保存：金鑰由 secret 傳入（`SIGNING_KEY_PEM`、`VERIFIER_KEY_PEM`、`VERIFIER_ACCESS_TOKEN`、`TWFIDO_AES_KEY`），`signing_generate=false`；版型包每次冷啟動重新下載。
+- 用同一個映像，`DIW_PLATFORM=cloudflare`。`deploy/cloudflare/` 的 Worker 把每個請求轉到名為 `main` 的單一容器執行個體（Durable Object 加 `@cloudflare/containers`，`max_instances` 為 1），WebSocket 直接轉送。
+- 設定：整份 `server.conf` 存成 secret `SERVER_CONF`，Worker 以 `DIW_CONFIG_TEXT` 交給容器；名為 `DIW_<鍵>` 的 var 或 secret 原樣傳入，覆寫檔內設定。
+- Worker 以 `CF-Connecting-IP` 覆寫 `X-Forwarded-For`（不附加，避免用戶端自選位址），平台預設 `trust_forwarded=true`。
+- 磁碟不保存：平台預設 `signing_generate=false`、資料目錄 `/tmp/diw-server`；金鑰寫在設定中；版型包每次冷啟動重新下載。
 - 執行個體類型預設 `standard-1`（4 GiB、1/2 vCPU），只開中繼可用 `basic`。閒置 `SLEEP_AFTER`（預設 20 分鐘）後休眠。
 - 費用：Workers Paid 每月 5 美元，含 25 GiB-小時記憶體與 375 vCPU-分鐘，休眠時不計。
 - 純 Workers（不用容器）不能執行 JVM 與原生程式庫；以 Durable Object 重寫中繼的方案已放棄（2026-10-25 使用者決定）。
 
 ### 5.5 設定
 
-`key=value` 設定檔（預設 `/etc/diw-server/server.conf`，或以 `DIW_CONFIG` 指定），每個鍵都可用環境變數 `DIW_<鍵的大寫>` 覆寫。設定檔中的未知鍵會讓程式拒絕啟動；其他 `DIW_` 開頭的環境變數不視為設定。
+2026-11-05 起，手動安裝與所有映像讀同一份設定（使用者要求「手動配置與所有鏡像所配置的內容應完全一致」）：
 
-| 鍵 | 預設 | 說明 |
-|---|---|---|
-| `public_url` | 必填 | 對外網址，例如 `https://diw.example.org`。查驗連結、中繼與網頁查驗的網址都由它產生，必須是錢包實際連得到的名稱；`/info` 會回報它，名稱無法解析時啟動記錄會警告 |
-| `listen_host`、`listen_port` | `127.0.0.1`、`8080` | 由 Caddy 代理；容器內為 `0.0.0.0`；未指定連接埠時採用 `PORT` |
-| `trust_forwarded` | 監聽 loopback 時為 true | 是否採用代理轉送的用戶端位址（每個位址的連線上限依此計算） |
-| `features` | `relay` | 啟用的功能，以逗號分隔：`relay`、`zktls`、`bonds-age`、`verifier`、`twfido` |
-| `data_dir` | `/var/lib/diw-server` | 資料目錄（原生程式庫解壓、之後的金鑰） |
-| `relay_max_rooms` 等 | 見 3.1 | 中繼限制 |
-| `bonds_age_max_sessions`、`bonds_age_per_address` | `64`、`8` | 年齡查驗的同時請求數與每個位址的上限 |
-| `verifier_name` | `DIW 網頁查驗` | 持卡人同意畫面上的查驗方名稱 |
-| `verifier_access_token` | 無 | 設定後建立查驗需輸入這個存取碼（至少 8 字元）；未設定時任何人都可使用 |
-| `verifier_key_dir` | 資料目錄下的 `verifier/` | 查驗端金鑰的位置；Cloud Run 上請掛載 Secret，否則每次冷啟動 DID 都會改變 |
-| `verifier_max_sessions`、`verifier_per_address` | `64`、`8` | 同時查驗數與每個位址的上限 |
-| `bonds_age_verify` | `false` | 在主機驗證年齡證明（需原生程式庫與約 450 MB 的驗證金鑰，記憶體建議 2 GB 以上，未實測） |
+- 所有設定列在 `ConfigKeys.kt`（名稱、預設值、說明、是否秘密、是否部署相關）。解析、`diw-server config-template`（產生 `deploy/server.conf.example`）與各部署檔都以它為準；測試檢查範本與程式一致、範本可解析、各部署檔只用已知的 `DIW_` 鍵、各映像與服務檔只設定 `DIW_PLATFORM` 而不設服務設定。
+- 格式：每行 `DIW_<鍵>=值`（也接受小寫 `key=value`、`export `、引號與 `#` 註解），同時是 systemd EnvironmentFile、compose `env_file`、Cloud Run 掛載的 Secret 與 Cloudflare 的 secret。設定檔中的未知鍵會讓程式拒絕啟動。
+- 來源優先順序：平台預設（`DIW_PLATFORM`：`host`、`container`、`compose`、`cloudrun`、`cloudflare`，只影響 `listen_host`、`data_dir`、`trust_forwarded`、`signing_generate`）、設定內容（`DIW_CONFIG_TEXT`，否則 `DIW_CONFIG` 指定的檔案或 `/etc/diw-server/server.conf`）、環境變數 `DIW_<鍵>`，最後 `PORT`（只在未設定 `listen_port` 時）。
+- 設定摘要：`settingsSha256` 是所有非部署、非秘密設定的實際值（含預設值）的 SHA-256，出現在 `/info`、啟動紀錄與 `diw-server config`。同一份設定部署到不同平台，摘要相同。
+- 各鍵的說明與預設值見 `deploy/server.conf.example`（由程式產生，不另外維護表格）。
 
-| `zktls_token_sha256` | 無（啟用 `zktls` 時必填） | 存取權杖的 SHA-256，以逗號分隔可列多個 |
-| `zktls_max_sessions`、`zktls_per_address`、`zktls_concurrent` | `16`、`4`、`1` | 同時工作階段、每個位址的上限、同時查驗數 |
-| `zktls_templates_file` | 無 | 本機的簽章範本包，代替從錢包 Release 下載（仍以釘選公鑰驗證） |
-| `signing_key_file` | 資料目錄下的 `signing.pem` | 簽章金鑰檔 |
-| `signing_key_pem` | 無 | 簽章金鑰的整份 PEM（優先於檔案）；設定檔中可用 `\n` 表示換行 |
-| `signing_generate` | `true` | 金鑰檔不存在時自動產生；磁碟不保存的平台設 `false` |
-| `verifier_key_pem` | 無 | 網頁查驗端金鑰的整份 PEM（優先於 `verifier_key_dir`） |
-| `twfido_environment` | `production` | 行動自然人憑證服務的環境：`production` 或 `uat` |
-| `twfido_service_id`、`twfido_aes_key` | 無（啟用 `twfido` 時必填） | 內政部核發的 SP 服務代碼與 AES 金鑰（base64，32 位元組）；金鑰請以 secret 提供 |
-| `twfido_token_sha256` | `zktls_token_sha256` 的值 | 簽署用存取權杖的 SHA-256，以逗號分隔可列多個；兩者都未設定時拒絕啟動 |
-| `twfido_max_sessions`、`twfido_per_address`、`twfido_per_id` | `16`、`4`、`2` | 同時請求、每個位址與每個身分證號的上限 |
+### 5.6 原生執行檔（實驗）
+
+- GraalVM native-image（`org.graalvm.buildtools.native` 0.10.6，`./gradlew nativeCompile`），需 GraalVM 25：21.0.2 編譯 Kotlin 協程時出現 `Frame states being merged are incompatible`。參數：`--no-fallback`、`-march=compatibility`、`--enable-url-protocols=http,https`、`-Dfile.encoding=UTF-8`、`-H:IncludeLocales=en,zh`。
+- 反射、資源（含 `zk/native/linux-x86_64/libdiw_zk.so`）、JNI 與序列化設定由 tracing agent 跑完整測試產生（`tools/native-metadata.sh`），`tools/filter-native-metadata.py` 去掉只屬於測試的項目。
+- 原生程式庫（tlsn）照常以 JNA 從資源解壓後載入；`./gradlew test -Pdiw.nativeServer=build/native/nativeCompile/diw-server` 讓 zkTLS 端對端測試改對原生執行檔執行（持有人在測試 JVM，服務端是原生程序），已通過。
+- 實測（只開中繼，4 核心開發機）：啟動到 `/healthz` 可回應約 0.17 秒，RSS 約 79 MB；執行檔約 95 MB。
+- 發佈：Release 的 `diw-server-<version>-native` 與映像 `<version>-native`（`Dockerfile.native`）。JVM 版仍是預設；原生版的設定、資料目錄與指令都相同，可隨時切換。
 
 ## 6. 1 GB 主機的資源配置
 
@@ -238,4 +230,4 @@ S1 至 S3 與 TWFIDO SP 的程式與自動測試已完成（zkTLS 查驗主機�
 
 ## 9. 之後的方向
 
-- Native 化：Kotlin/Native 不可行（錢包 `core` 依賴 Multipaz JVM、BouncyCastle、JNA）。GraalVM native-image 需把 Netty 換成 CIO（Ktor 的 native image 只支援 CIO），並補 JNA、BouncyCastle 的設定；先以 AppCDS 縮短啟動，GraalVM 映像列為實驗性選項，JVM 映像保留。
+- Native 化：Kotlin/Native 不可行（錢包 `core` 依賴 Multipaz JVM、BouncyCastle、JNA）。GraalVM native-image 已可用（5.6，實驗）；實機部署穩定後再考慮改為預設映像。
