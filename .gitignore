@@ -3,3 +3,6 @@ build/
 .kotlin/
 .env
 *.log
+# Local settings and keys: server.conf holds tokens and keys (deploy/server.conf.example stays tracked).
+/server.conf
+/*.pem
