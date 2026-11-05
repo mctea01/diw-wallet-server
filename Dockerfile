@@ -22,9 +22,9 @@ RUN set -e; \
     test -s /opt/diw-server/diw-server.jsa; \
     rm -rf /tmp/cds
 USER diw
-ENV DIW_LISTEN_HOST=0.0.0.0 \
-    DIW_LISTEN_PORT=8080 \
-    DIW_DATA_DIR=/var/lib/diw-server \
+# The platform only changes defaults (listen on 0.0.0.0); settings come from server.conf or DIW_ variables as on
+# any other deployment.
+ENV DIW_PLATFORM=container \
     JDK_JAVA_OPTIONS=-XX:SharedArchiveFile=/opt/diw-server/diw-server.jsa
 VOLUME /var/lib/diw-server
 EXPOSE 8080

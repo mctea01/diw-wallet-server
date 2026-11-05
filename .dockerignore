@@ -1,2 +1,7 @@
 *
 !build/install/diw-server/**
+!build/native/nativeCompile/diw-server
+!deploy/**
+deploy/cloudflare/node_modules
+!README.md
+!LICENSE

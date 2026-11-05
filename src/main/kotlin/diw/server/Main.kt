@@ -31,6 +31,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -97,8 +98,16 @@ class Server(
 
     private val tlsn = zkTlsAvailable ?: (ZkBackend.TLSN in native)
 
+    /** Roots from zktls_extra_roots_file (an intranet or test page), read once at start. */
+    private val extraRoots: List<ByteArray> = config.zkTlsExtraRootsFile?.let { file ->
+        require(file.isFile) { "zktls_extra_roots_file not found: ${file.path}" }
+        Regex("-----BEGIN CERTIFICATE-----[\\s\\S]+?-----END CERTIFICATE-----").findAll(file.readText())
+            .map { org.multipaz.crypto.X509Cert.fromPem(it.value).encoded.toByteArray() }.toList()
+            .also { require(it.isNotEmpty()) { "zktls_extra_roots_file holds no certificate" } }
+    }.orEmpty()
+
     val zkTls: ZkTlsHost? = signing?.let { id ->
-        ZkTlsHost(config.publicUrl, id, config.zkTls, { BuiltInAnchors.all.map { it.certificate.encoded.toByteArray() }.distinct() + zkTlsRoots }) { tlsn }
+        ZkTlsHost(config.publicUrl, id, config.zkTls, { BuiltInAnchors.all.map { it.certificate.encoded.toByteArray() }.distinct() + zkTlsRoots + extraRoots }) { tlsn }
     }
 
     /** Mobile citizen certificate signing with this server's SP account (the SP key never leaves the server). */
@@ -106,6 +115,10 @@ class Server(
         http, config.twFidoEnvironment, MobileMoicaCredentials(config.twFidoServiceId!!, config.twFidoAesKey!!), config.twFido,
         twFidoBaseUrl ?: config.twFidoEnvironment.baseUrl,
     )
+
+    /** This server as an OpenID Federation entity (and superior, with a subordinates file). */
+    val federation: Federation? = if (ServerConfig.FEATURE_FEDERATION !in config.features) null else
+        runBlocking { Federation.loadKey(config).let { Federation(config, it, Federation.jwk(it.publicKey), { serverMetadata() }) } }
 
     /** Whether every enabled feature can run: zktls needs TLSNotary in the native library. */
     val healthy: Boolean get() = zkTls == null || tlsn
@@ -119,6 +132,20 @@ class Server(
         DidResolver(http), this.didTrust,
         if (checkStatus) W3cStatusChecker(http, TrustRegistry(EphemeralStorage(), EnvironmentPolicy()), this.didTrust) else null,
     )
+
+    /**
+     * The `diw_wallet_server` metadata: what a wallet otherwise reads from /info and confirms by hand, signed into the
+     * federation so a trusted Trust Anchor vouches for the signing root and the web verifier DID.
+     */
+    fun serverMetadata(): JsonObject = buildJsonObject {
+        put(Federation.SERVER_TYPE, buildJsonObject {
+            put("public_url", config.publicUrl)
+            putJsonArray("features") { config.features.sorted().forEach { add(JsonPrimitive(it)) } }
+            signing?.let { put("signing_root_sha256", it.rootSha256) }
+            verifier?.let { put("verifier_did", it.did) }
+            put("settings_sha256", config.settingsDigest())
+        })
+    }
 
     /**
      * With bonds_age_verify, installs the OpenAC verifying keys under the data directory (pinned hashes, fetched once)
@@ -183,6 +210,17 @@ fun Application.module(server: Server) {
                 server.templates?.version?.let { put("templatesVersion", it) }
                 // Which TW FidO service this server's SP account signs with; the account itself stays private.
                 server.twFido?.let { put("twfido", buildJsonObject { put("environment", it.environment.name) }) }
+                // Equal on every deployment with the same service settings (ServerConfig.settingsDigest).
+                put("settingsSha256", server.config.settingsDigest())
+                put("platform", server.config.platform.id)
+                // The federation entity, for adding its Trust Anchor or this server in the wallet.
+                server.federation?.let { f ->
+                    put("federation", buildJsonObject {
+                        put("entityId", f.entityId)
+                        putJsonArray("authorityHints") { server.config.federation.authorityHints.forEach { add(JsonPrimitive(it)) } }
+                        put("superior", f.isSuperior)
+                    })
+                }
             }
             call.respondText(body.toString(), ContentType.Application.Json)
         }
@@ -191,12 +229,35 @@ fun Application.module(server: Server) {
         server.verifier?.let { verifierRoutes(it, server.config.verifierAccessToken) }
         server.zkTls?.let { zkTlsRoutes(it, server.config.zkTlsTokenHashes) }
         server.twFido?.let { twFidoRoutes(it, server.config.twFidoTokenHashes) }
+        server.federation?.let { federationRoutes(it) }
     }
 }
 
+private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | config | " +
+    "config-template | federation-jwks | federation-enroll <entity_id>]"
+
+private fun fail(message: String): Nothing {
+    System.err.println("diw-server: $message")
+    exitProcess(2)
+}
+
+private fun loadConfig(): ServerConfig = try {
+    ServerConfig.load()
+} catch (e: IllegalArgumentException) {
+    fail(e.message ?: "invalid settings")
+}
+
 /**
- * `keygen <file> <public_url>` writes a signing file, or with `verifier` the web verifier's key, for a platform
- * secret (signing_key_pem, verifier_key_pem); `hash-token` prints the SHA-256 of stdin's first line.
+ * Commands besides serving:
+ * - `keygen <file> <public_url> [verifier|federation]` writes a key file for a platform secret (signing_key_pem,
+ *   verifier_key_pem, federation_key_pem);
+ * - `hash-token` prints the SHA-256 of stdin's first line;
+ * - `config` prints the effective settings, where each came from (secrets hidden) and the settings digest that
+ *   /info also reports, to compare deployments;
+ * - `config-template` prints the settings file every deployment uses (deploy/server.conf.example);
+ * - `federation-jwks` prints this server's federation keys, for the superior that enrols it;
+ * - `federation-enroll <entity_id>` fetches and checks a subordinate's Entity Configuration and prints the entry to
+ *   add to federation_subordinates_file after comparing the key thumbprints with its operator.
  */
 private fun command(args: Array<String>): Boolean {
     when (args.firstOrNull()) {
@@ -204,56 +265,87 @@ private fun command(args: Array<String>): Boolean {
         "keygen" -> {
             val file = args.getOrNull(1)?.let { File(it) }
             val url = args.getOrNull(2)
-            if (file == null || url == null) {
-                System.err.println("usage: diw-server keygen <file> <public_url> [verifier]")
-                exitProcess(2)
-            }
-            if (file.exists()) {
-                System.err.println("diw-server: ${file.path} exists; remove it first")
-                exitProcess(2)
-            }
-            if (args.getOrNull(3) == "verifier") {
-                val identity = runBlocking { TwdiwVerifier.Identity.create() }
-                writePrivateFile(file, TwdiwVerifier.Identity.pem(identity))
-                println("Wrote ${file.path}; verifier DID ${identity.did}")
-            } else {
-                val identity = runBlocking { SigningIdentity.create(url) }
-                SigningIdentity.write(file, identity)
-                println("Wrote ${file.path}; root SHA-256 ${identity.rootSha256}")
+            if (file == null || url == null) fail(USAGE)
+            if (file.exists()) fail("${file.path} exists; remove it first")
+            when (args.getOrNull(3)) {
+                "verifier" -> {
+                    val identity = runBlocking { TwdiwVerifier.Identity.create() }
+                    writePrivateFile(file, TwdiwVerifier.Identity.pem(identity))
+                    println("Wrote ${file.path}; verifier DID ${identity.did}")
+                }
+                "federation" -> {
+                    val key = runBlocking { Federation.createKey() }
+                    writePrivateFile(file, Federation.pem(key))
+                    println("Wrote ${file.path}; federation key ${runBlocking { Federation.jwk(key.publicKey) }["kid"]}")
+                }
+                null -> {
+                    val identity = runBlocking { SigningIdentity.create(url) }
+                    SigningIdentity.write(file, identity)
+                    println("Wrote ${file.path}; root SHA-256 ${identity.rootSha256}")
+                }
+                else -> fail(USAGE)
             }
         }
         "hash-token" -> {
             val token = readlnOrNull()?.trim().orEmpty()
-            if (token.length < 16) {
-                System.err.println("diw-server: use a token of at least 16 characters")
-                exitProcess(2)
-            }
+            if (token.length < 16) fail("use a token of at least 16 characters")
             println(SigningIdentity.sha256Hex(token.encodeToByteArray()))
         }
-        else -> {
-            System.err.println("usage: diw-server [keygen <file> <public_url> [verifier] | hash-token]")
-            exitProcess(2)
+        "config" -> {
+            val config = loadConfig()
+            println("# platform ${config.platform.id}")
+            for ((key, value) in config.effective()) {
+                val source = config.sources[key] ?: "default"
+                println("${ConfigKeys.get(key)!!.env}=${value ?: ""}    # $source")
+            }
+            println("# settings digest ${config.settingsDigest()}")
         }
+        "config-template" -> print(ConfigKeys.template())
+        "federation-jwks" -> {
+            val config = loadConfig()
+            if (!config.dataDir.isDirectory && !config.dataDir.mkdirs()) fail("cannot create data directory ${config.dataDir}")
+            val jwk = runBlocking { Federation.jwk(Federation.loadKey(config).publicKey) }
+            println(buildJsonObject { put("keys", kotlinx.serialization.json.JsonArray(listOf(jwk))) })
+        }
+        "federation-enroll" -> {
+            val id = args.getOrNull(1)?.trimEnd('/') ?: fail(USAGE)
+            val http = HttpClient(Java)
+            try {
+                val ec = runBlocking { diw.wallet.core.federation.FederationResolver(http, { emptyList() }).configuration(id) }
+                ec.checkTime(kotlin.time.Clock.System.now().epochSeconds, 120)
+                System.err.println("Entity Configuration of $id verified with its own keys; compare these thumbprints with its operator:")
+                ec.jwks.forEach { System.err.println("  " + diw.wallet.core.jose.jwkThumbprint(it)) }
+                val types = ec.metadata.keys.filter { it != "federation_entity" }
+                println(Federation.enrolment(id, ec.jwks, types))
+            } catch (e: Exception) {
+                fail("cannot read the Entity Configuration of $id: ${e.message}")
+            } finally {
+                http.close()
+            }
+        }
+        else -> fail(USAGE)
     }
     return true
 }
 
 fun main(args: Array<String>) {
+    // Command output (the settings template, verifier names) is UTF-8 whatever the locale, so Chinese never turns into ?.
+    System.setOut(java.io.PrintStream(java.io.FileOutputStream(java.io.FileDescriptor.out), true, Charsets.UTF_8))
+    System.setErr(java.io.PrintStream(java.io.FileOutputStream(java.io.FileDescriptor.err), true, Charsets.UTF_8))
     if (command(args)) return
-    val config = try {
-        ServerConfig.load()
-    } catch (e: IllegalArgumentException) {
-        System.err.println("diw-server: ${e.message}")
-        exitProcess(2)
-    }
+    val config = loadConfig()
     if (!config.dataDir.isDirectory && !config.dataDir.mkdirs()) {
         System.err.println("diw-server: cannot create data directory ${config.dataDir}")
         exitProcess(2)
     }
-    val server = Server(config)
+    val server = try {
+        Server(config)
+    } catch (e: IllegalArgumentException) {
+        fail(e.message ?: "invalid settings")
+    }
     server.prepare(CoroutineScope(SupervisorJob()))
-    log.info("diw-wallet-server {} on {}:{} for {}, features {}, native {}", serverVersion, config.listenHost,
-        config.listenPort, config.publicUrl, config.features.sorted(), server.nativeBackends)
+    log.info("diw-wallet-server {} on {}:{} for {}, features {}, native {}, platform {}, settings {}", serverVersion, config.listenHost,
+        config.listenPort, config.publicUrl, config.features.sorted(), server.nativeBackends, config.platform.id, config.settingsDigest().take(12))
     // Session links, relay addresses and the web verifier's URLs are all built from public_url, so a name that does
     // not resolve breaks every wallet connection while /info still answers at the address actually used.
     val publicHost = java.net.URI(config.publicUrl).host
