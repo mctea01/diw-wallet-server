@@ -102,7 +102,6 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
-        id: graalvm
         with:
           java-version: "25"
           distribution: graalvm-community
@@ -114,8 +113,6 @@ jobs:
         with:
           workspaces: wallet/native -> target
       - name: Native executable
-        env:
-          GRAALVM_HOME: ${{ steps.graalvm.outputs.java-home }}
         run: ./gradlew --no-daemon --stacktrace nativeCompile
       - name: End-to-end test against the native executable
         run: ./gradlew --no-daemon --stacktrace test -Pdiw.nativeServer=build/native/nativeCompile/diw-server --tests 'diw.server.ZkTlsHostTest'
