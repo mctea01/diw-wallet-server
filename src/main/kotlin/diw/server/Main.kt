@@ -314,7 +314,8 @@ private fun command(args: Array<String>): Boolean {
             // Printed once for the platform secret; the public half is what /oprf/v1/key will show.
             val key = OprfHost.generateKey()
             println("DIW_OPRF_KEY=$key")
-            val directory = File(System.getProperty("java.io.tmpdir"), "diw-server-native").apply { mkdirs() }
+            // A fresh owner-only directory, so no other local user can plant the library it loads.
+            val directory = java.nio.file.Files.createTempDirectory("diw-server-native").toFile().apply { deleteOnExit() }
             if (ZkNative.load(directory) is ZkResult.Ok && "oprf" in nativeInfo().features) {
                 println("# public key: " + oprfPublicKey(key))
             } else {
