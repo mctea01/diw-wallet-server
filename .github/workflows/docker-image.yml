@@ -1,5 +1,6 @@
 # Tests every push to main and every pull request; a v* tag also publishes the container image to GHCR and
-# attaches the distribution (with its Java runtime) to a GitHub release.
+# attaches the distribution (with its Java runtime) to a GitHub release. The native job builds the experimental
+# GraalVM executable, runs the zkTLS end-to-end test against it and, on a tag, publishes <version>-native.
 name: ci
 
 on:
@@ -84,3 +85,91 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "${GITHUB_REF_NAME}" build/distributions/*.tar --title "${GITHUB_REF_NAME}" --generate-notes
+
+  native:
+    # Experimental: a failure here never blocks the JVM build or its release.
+    needs: build
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: true
+      # Tests run on Java 21 as in the build job; native-image comes from GraalVM 25 (21 fails on Kotlin coroutines).
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: graalvm/setup-graalvm@v1
+        id: graalvm
+        with:
+          java-version: "25"
+          distribution: graalvm-community
+          set-java-home: false
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      - name: Native build tools (protoc and libclang for OpenAC)
+        run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: wallet/native -> target
+      - name: Native executable
+        env:
+          GRAALVM_HOME: ${{ steps.graalvm.outputs.java-home }}
+        run: ./gradlew --no-daemon --stacktrace nativeCompile
+      - name: End-to-end test against the native executable
+        run: ./gradlew --no-daemon --stacktrace test -Pdiw.nativeServer=build/native/nativeCompile/diw-server --tests 'diw.server.ZkTlsHostTest'
+      - name: Smoke test
+        run: |
+          build/native/nativeCompile/diw-server config-template | cmp - deploy/server.conf.example
+          mkdir -p "$RUNNER_TEMP/data"
+          DIW_CONFIG_TEXT="DIW_PUBLIC_URL=http://127.0.0.1:18080
+          DIW_LISTEN_PORT=18080
+          DIW_DATA_DIR=$RUNNER_TEMP/data" build/native/nativeCompile/diw-server &
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:18080/healthz && break; sleep 0.2; done
+          curl -fsS http://127.0.0.1:18080/info
+          kill %1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: native
+          path: build/native/nativeCompile/diw-server
+          retention-days: 14
+
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            latest=false
+            suffix=-native
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - name: Build and push the native image
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: Dockerfile.native
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp build/native/nativeCompile/diw-server "diw-server-${GITHUB_REF_NAME#v}-native"
+          # The build job creates the release; wait for it, then add the executable.
+          for i in $(seq 1 30); do gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && break; sleep 10; done
+          gh release upload "${GITHUB_REF_NAME}" "diw-server-${GITHUB_REF_NAME#v}-native" --clobber
