@@ -17,6 +17,7 @@
 | 網頁查驗端 | v1（可選） | `/verify` 網頁與 `/api/oidvp/*`，以官方查驗端的方言向政府數位憑證皮夾請求卡片，也可查驗 Bonds 自然人憑證自發卡 | 可 |
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
 | 行動自然人憑證簽署 | v1（可選） | `/twfido/sign`，以服務端的 SP 帳號向內政部要求簽署，SP 金鑰不放進 App | 可 |
+| 本專案 OPRF | v1（可選） | `/oprf/v1/key`、`/oprf/v1/evaluate`，zkPassport 加鹽唯一識別碼的單一金鑰 OPRF，金鑰不放進 App | 可（每次評估為一次純量乘法與證明） |
 | 信任聯盟 | v1（可選） | `/.well-known/openid-federation`，OpenID Federation 1.0 的 Entity Configuration；可當上級（`/federation/fetch`、`/federation/list`） | 可 |
 
 ## 2. 技術選擇
@@ -128,6 +129,21 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 限制：建立需存取權杖（只存 SHA-256），避免被用來對任意身分證號推播；同時請求 16、每個位址 4、每個身分證號 2（以雜湊計，不保存號碼）。
 - 隱私：服務端看得到身分證號、提示與待簽位元組；三者與結果只在記憶體，到期後 2 分鐘刪除，不寫入 log，回應也不回傳身分證號。
 - 環境：`twfido_environment` 為 `production`（預設）或 `uat`；兩者都需內政部核發的 SP 帳號。`/info` 的 `twfido.environment` 列出目前的環境。
+
+### 3.8 本專案 OPRF（`oprf`）
+
+2026-11-05 使用者決定（錢包 `docs/design/zkpassport.md` 5.5）：zkPassport 的加鹽唯一識別碼改用本專案的 OPRF，金鑰放在服務端 secret，不放進 APK（任何人都能從 APK 取出金鑰，等於沒有加鹽）。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| GET | `/oprf/v1/key` | `{key_id, pk: {x, y, hash}}`；`hash` 是 zkPassport 電路輸出的 `oprf_pk_hash`，查驗端以它判斷接受的金鑰 |
+| POST | `/oprf/v1/evaluate` | 需 `Authorization: Bearer <權杖>`；JSON `{key_id, blinded_query: {x, y}}`，回 `{key_id, pk, response_blinded, dlog_e, dlog_s}` |
+
+- 計算沿用錢包原生程式庫的 `oprf_evaluate`（TACEO `taceo-oprf-core`）：回應為金鑰乘以盲化點，附 Chaum-Pedersen 證明；錢包以 `/oprf/v1/key` 的公鑰核對證明，再解盲成電路的 `nullifier_secret`。zkPassport 的揭露電路已實測接受此證明。
+- 服務端只看到盲化點（隨機純量乘上雜湊到曲線的私密 nullifier），看不到 nullifier、護照資料或結果；請求不寫入 log、不保存。
+- 授權（第一版）：存取權杖（只存 SHA-256，`oprf_token_sha256` 未設定時沿用 `zktls_token_sha256`）加每個位址每小時 `oprf_per_address`（預設 20）、全部 `oprf_total`（預設 2000）次。第二版加入本專案 FaceMatch 證明（需要 Play Integrity 金鑰），之前的識別碼在錢包與查驗端標示「未經人臉比對」。
+- 金鑰：`oprf_key`（BabyJubJub 純量，`diw-server oprf-keygen` 產生，secret），`oprf_key_id`（預設 `1`）隨公鑰公開。換鑰時產生新金鑰並改 `oprf_key_id`；舊識別碼全部失效，錢包與查驗端以新公鑰雜湊為準。
+- 原生程式庫要含 `oprf`；`DIW_ZK_FEATURES` 未含時 `/oprf/*` 與 `/healthz` 回 503。
 
 ## 4. 金鑰與信任
 

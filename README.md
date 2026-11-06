@@ -10,6 +10,7 @@
 - **網頁查驗端**（`/verify`，可選，`features` 加 `verifier`）：查驗方在網頁輸入卡片類型與欄位，持卡人以政府數位憑證皮夾掃描 QR Code 出示，頁面顯示判定與要求的欄位；也可查驗 Bonds 的自然人憑證自發卡。可設 `verifier_access_token` 限制只有知道存取碼的人能建立查驗。
 - **行動自然人憑證簽署**（`/twfido/sign`，可選，`features` 加 `twfido`）：以這台服務端的 SP 帳號向內政部要求行動自然人憑證簽署，SP 金鑰只放在服務端，不必放進 App。需要內政部核發的 SP 帳號；建立簽署需要存取權杖，避免被用來對任意身分證號推播。服務端看得到身分證號與要簽的位元組（不含文件），只放在記憶體、不寫入 log；簽章由錢包自行驗證。
 - **信任聯盟**（`/.well-known/openid-federation`，可選，`features` 加 `federation`）：以 OpenID Federation 1.0 發佈這台服務端的 Entity Configuration，在 `diw_wallet_server` 中繼資料中列出簽章根憑證指紋、網頁查驗端 DID、功能與設定摘要。錢包信任該聯盟的 Trust Anchor 時，加入服務端就不必再逐字比對指紋。設定 `federation_subordinates_file` 時，這台服務端也能當上級（Intermediate 或 Trust Anchor），提供 `/federation/fetch` 與 `/federation/list`。
+- **本專案 OPRF**（`/oprf/v1/*`，可選，`features` 加 `oprf`）：錢包以 zkPassport 電路產生「加鹽唯一識別碼」時使用的單一金鑰 OPRF（錢包 `docs/design/zkpassport.md` 5.5）。服務端只看到盲化後的點，看不到護照資料或私密 nullifier；金鑰只放在 secret，公鑰列在 `/oprf/v1/key` 與 `/info`。回答需要存取權杖，每個位址每小時有次數上限。需要含 `oprf` 的原生程式庫（錢包原生建置的 `zkpdf` 會一併開啟），否則 `/healthz` 回 503。
 - **健康檢查**（`/healthz`）與**版本資訊**（`/info`，含設定摘要 `settingsSha256`）。
 
 zkPDF 證明器（S4）尚未實作。
@@ -171,6 +172,7 @@ CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-serve
 - 換鑰會讓根憑證指紋改變，所有錢包都要重新確認信任，請備份 `signing.pem`。
 - 存取權杖：設定只存 SHA-256（`DIW_ZKTLS_TOKEN_SHA256`，可用逗號列多個，方便輪換）。權杖本身交給要使用這台主機的人，填進錢包，或由錢包「分享設定」時勾選一併分享。
 - 行動自然人憑證 SP（`twfido`）：`DIW_TWFIDO_SERVICE_ID` 與 `DIW_TWFIDO_AES_KEY`（內政部核發，AES 金鑰為 base64 的 32 位元組）、`DIW_TWFIDO_TOKEN_SHA256`（未設定時沿用 `DIW_ZKTLS_TOKEN_SHA256`；錢包只填一個權杖，兩者都要含錢包用的那個），測試帳號另設 `DIW_TWFIDO_ENVIRONMENT=uat`。AES 金鑰和其他秘密一樣只放在權限 0600 的 `server.conf`（或平台的 secret）。
+- OPRF 金鑰（`oprf`）：`diw-server oprf-keygen` 印出新金鑰（`DIW_OPRF_KEY=0x…`，有原生 OPRF 時一併印出公鑰），和其他秘密一樣只放在權限 0600 的 `server.conf`（或平台的 secret）。`DIW_OPRF_TOKEN_SHA256` 未設定時沿用 `DIW_ZKTLS_TOKEN_SHA256`。換鑰時改 `DIW_OPRF_KEY_ID`；換鑰後所有加鹽識別碼都會改變，舊的不再對得上。
 - 金鑰、權杖與憑證從不寫入 log。
 
 ### 錢包端

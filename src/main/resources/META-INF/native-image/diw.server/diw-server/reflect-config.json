@@ -369,6 +369,25 @@
     ]
   },
   {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkProgressMethod0",
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
     "name": "diw.wallet.core.zk.native.bindings.UniffiCallbackInterfaceZkTlsChannelMethod0",
     "queryAllDeclaredMethods": true,
     "queryAllPublicMethods": true,
@@ -531,6 +550,28 @@
     ]
   },
   {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkProgress",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkProgress$UniffiByValue",
+    "allDeclaredFields": true,
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
     "name": "diw.wallet.core.zk.native.bindings.UniffiVTableCallbackInterfaceZkTlsChannel",
     "allDeclaredFields": true
   },
@@ -607,6 +648,40 @@
       {
         "name": "copyForStackTraceRecovery",
         "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkProgress$onProgress",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
+      }
+    ]
+  },
+  {
+    "name": "diw.wallet.core.zk.native.bindings.uniffiCallbackInterfaceZkProgress$uniffiFree",
+    "fields": [
+      {
+        "name": "OPTIONS"
+      },
+      {
+        "name": "STRING_ENCODING"
+      },
+      {
+        "name": "STRUCTURE_ALIGNMENT"
+      },
+      {
+        "name": "TYPE_MAPPER"
       }
     ]
   },

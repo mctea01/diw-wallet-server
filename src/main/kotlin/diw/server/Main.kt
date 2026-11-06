@@ -16,6 +16,8 @@ import diw.wallet.core.zk.ZkResult
 import diw.wallet.core.zk.native.FileZkAssetStore
 import diw.wallet.core.zk.native.OpenAcAgeNativeVerifier
 import diw.wallet.core.zk.native.ZkNative
+import diw.wallet.core.zk.native.bindings.nativeInfo
+import diw.wallet.core.zk.native.bindings.oprfPublicKey
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
 import io.ktor.http.ContentType
@@ -128,8 +130,12 @@ class Server(
     val federation: Federation? = if (ServerConfig.FEATURE_FEDERATION !in config.features) null else
         runBlocking { Federation.loadKey(config).let { Federation(config, it, Federation.jwk(it.publicKey), { serverMetadata() }) } }
 
-    /** Whether every enabled feature can run: zktls needs TLSNotary in the native library. */
-    val healthy: Boolean get() = zkTls == null || tlsn
+    /** The project OPRF (zkPassport salted identifiers); the key comes from a platform secret. */
+    val oprf: OprfHost? = if (ServerConfig.FEATURE_OPRF !in config.features) null else
+        OprfHost(config.oprfKey!!, config.oprfKeyId, config.oprf)
+
+    /** Whether every enabled feature can run: zktls needs TLSNotary and oprf the OPRF in the native library. */
+    val healthy: Boolean get() = (zkTls == null || tlsn) && (oprf == null || oprf.publicKey != null)
 
     val verifier: TwdiwVerifier? = if (ServerConfig.FEATURE_VERIFIER !in config.features) null else TwdiwVerifier(
         config.publicUrl, config.verifier, config.verifierName,
@@ -164,6 +170,7 @@ class Server(
         zkTls?.start(scope)
         twFido?.start(scope)
         if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
+        if (oprf != null && oprf.publicKey == null) log.warn("The oprf feature is set but the native library has no OPRF")
         if (bondsAge == null || !config.bondsAgeVerify || nativeAgeVerifier != null) return
         if (ZkBackend.OPENAC_SPARTAN2 !in native) {
             log.warn("bonds_age_verify is set but the native library has no OpenAC backend; relaying only")
@@ -195,7 +202,7 @@ fun Application.module(server: Server) {
     routing {
         get("/healthz") {
             if (server.healthy) call.respondText("ok", ContentType.Text.Plain, HttpStatusCode.OK)
-            else call.respondText("native library without TLSNotary", ContentType.Text.Plain, HttpStatusCode.ServiceUnavailable)
+            else call.respondText("native library without a backend an enabled feature needs", ContentType.Text.Plain, HttpStatusCode.ServiceUnavailable)
         }
         get("/info") {
             val body = buildJsonObject {
@@ -218,6 +225,8 @@ fun Application.module(server: Server) {
                 server.templates?.version?.let { put("templatesVersion", it) }
                 // Which TW FidO service this server's SP account signs with; the account itself stays private.
                 server.twFido?.let { put("twfido", buildJsonObject { put("environment", it.environment.name) }) }
+                // The OPRF key verifiers accept salted identifiers under (its hash is the circuits' oprf_pk_hash).
+                server.oprf?.publicKey?.let { pk -> put("oprf", buildJsonObject { put("keyId", server.oprf.keyId); put("pk", pk) }) }
                 // Equal on every deployment with the same service settings (ServerConfig.settingsDigest).
                 put("settingsSha256", server.config.settingsDigest())
                 put("platform", server.config.platform.id)
@@ -238,10 +247,11 @@ fun Application.module(server: Server) {
         server.zkTls?.let { zkTlsRoutes(it, server.config.zkTlsTokenHashes) }
         server.twFido?.let { twFidoRoutes(it, server.config.twFidoTokenHashes) }
         server.federation?.let { federationRoutes(it) }
+        server.oprf?.let { oprfRoutes(it, server.config.oprfTokenHashes) }
     }
 }
 
-private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | config | " +
+private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | oprf-keygen | config | " +
     "config-template | federation-jwks | federation-enroll <entity_id>]"
 
 private fun fail(message: String): Nothing {
@@ -260,6 +270,7 @@ private fun loadConfig(): ServerConfig = try {
  * - `keygen <file> <public_url> [verifier|federation]` writes a key file for a platform secret (signing_key_pem,
  *   verifier_key_pem, federation_key_pem);
  * - `hash-token` prints the SHA-256 of stdin's first line;
+ * - `oprf-keygen` prints a new OPRF key for oprf_key and, with the native OPRF, its public half;
  * - `config` prints the effective settings, where each came from (secrets hidden) and the settings digest that
  *   /info also reports, to compare deployments;
  * - `config-template` prints the settings file every deployment uses (deploy/server.conf.example);
@@ -298,6 +309,18 @@ private fun command(args: Array<String>): Boolean {
             val token = readlnOrNull()?.trim().orEmpty()
             if (token.length < 16) fail("use a token of at least 16 characters")
             println(SigningIdentity.sha256Hex(token.encodeToByteArray()))
+        }
+        "oprf-keygen" -> {
+            // Printed once for the platform secret; the public half is what /oprf/v1/key will show.
+            val key = OprfHost.generateKey()
+            println("DIW_OPRF_KEY=$key")
+            // A fresh owner-only directory, so no other local user can plant the library it loads.
+            val directory = java.nio.file.Files.createTempDirectory("diw-server-native").toFile().apply { deleteOnExit() }
+            if (ZkNative.load(directory) is ZkResult.Ok && "oprf" in nativeInfo().features) {
+                println("# public key: " + oprfPublicKey(key))
+            } else {
+                System.err.println("diw-server: the native library has no OPRF; the public key shows at /oprf/v1/key once the server runs")
+            }
         }
         "config" -> {
             val config = loadConfig()
