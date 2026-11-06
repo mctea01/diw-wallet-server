@@ -101,7 +101,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: graalvm/setup-graalvm@v1
+      - uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
         id: graalvm
         with:
           java-version: "25"
