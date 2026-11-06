@@ -1,6 +1,8 @@
-# Install: unpack the release bundle (diw-server-<version>-linux-x86_64.tar.gz, with its own Java runtime) to
-# /opt/diw-server, copy this file to /etc/systemd/system/ and the config example to /etc/diw-server/server.conf,
-# then: systemctl daemon-reload && systemctl enable --now diw-server
+# Install: unpack the release bundle (diw-server-<version>.tar, with its own Java runtime) to /opt/diw-server, copy
+# this file to /etc/systemd/system/ and deploy/server.conf.example to /etc/diw-server/server.conf (the same settings
+# file compose, Cloud Run and Cloudflare use), then: systemctl daemon-reload && systemctl enable --now diw-server
+# The experimental native binary (diw-server-<version>-native) replaces bin/diw-server; JAVA_OPTS and the class data
+# sharing line below then have no effect.
 [Unit]
 Description=DIW wallet server
 After=network-online.target
@@ -11,7 +13,7 @@ Type=simple
 DynamicUser=yes
 StateDirectory=diw-server
 ConfigurationDirectory=diw-server
-Environment=DIW_DATA_DIR=/var/lib/diw-server
+Environment=DIW_PLATFORM=host
 Environment="JAVA_OPTS=-Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
 # Class data sharing archive made on the first start and remade after an upgrade; about halves start time.
 Environment="JDK_JAVA_OPTIONS=-XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/var/lib/diw-server/diw-server.jsa"

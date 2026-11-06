@@ -2,22 +2,17 @@ import { Container, getContainer } from "@cloudflare/containers";
 
 interface Env {
   DIW_SERVER: DurableObjectNamespace<DiwServer>;
-  PUBLIC_URL: string;
-  FEATURES: string;
-  ZKTLS_TOKEN_SHA256: string;
-  SLEEP_AFTER: string;
-  SIGNING_KEY_PEM?: string;
-  VERIFIER_KEY_PEM?: string;
-  VERIFIER_ACCESS_TOKEN?: string;
-  TWFIDO_ENVIRONMENT?: string;
-  TWFIDO_SERVICE_ID?: string;
-  TWFIDO_TOKEN_SHA256?: string;
-  TWFIDO_AES_KEY?: string;
+  /** The server.conf every other deployment uses, stored whole as a secret: wrangler secret put SERVER_CONF < server.conf */
+  SERVER_CONF?: string;
+  SLEEP_AFTER?: string;
+  JAVA_OPTS?: string;
+  /** Any DIW_<KEY> var or secret is passed through unchanged and overrides the file, as an environment variable does elsewhere. */
+  [name: string]: unknown;
 }
 
 /**
- * The server container. Its disk does not survive a restart, so keys come from secrets; generated keys would change
- * on every start and the wallet would ask the user to trust the server again.
+ * The server container. Its disk does not survive a restart, so keys come from the settings secret; generated keys
+ * would change on every start and the wallet would ask the user to trust the server again.
  */
 export class DiwServer extends Container<Env> {
   defaultPort = 8080;
@@ -26,24 +21,16 @@ export class DiwServer extends Container<Env> {
     super(ctx, env);
     this.sleepAfter = env.SLEEP_AFTER || "20m";
     const vars: Record<string, string> = {
-      DIW_PUBLIC_URL: env.PUBLIC_URL,
-      DIW_FEATURES: env.FEATURES,
-      DIW_LISTEN_HOST: "0.0.0.0",
+      // Only defaults change with the platform: listen on 0.0.0.0, trust the X-Forwarded-For set below, keep data
+      // in /tmp/diw-server and never generate keys there.
+      DIW_PLATFORM: "cloudflare",
       DIW_LISTEN_PORT: "8080",
-      // Only the Worker below reaches the container, and it sets X-Forwarded-For from CF-Connecting-IP.
-      DIW_TRUST_FORWARDED: "true",
-      DIW_DATA_DIR: "/tmp/diw-server",
-      DIW_SIGNING_GENERATE: "false",
-      JAVA_OPTS: "-Xmx384m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m",
+      JAVA_OPTS: env.JAVA_OPTS || "-Xmx384m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m",
     };
-    if (env.ZKTLS_TOKEN_SHA256) vars.DIW_ZKTLS_TOKEN_SHA256 = env.ZKTLS_TOKEN_SHA256;
-    if (env.SIGNING_KEY_PEM) vars.DIW_SIGNING_KEY_PEM = env.SIGNING_KEY_PEM;
-    if (env.VERIFIER_KEY_PEM) vars.DIW_VERIFIER_KEY_PEM = env.VERIFIER_KEY_PEM;
-    if (env.VERIFIER_ACCESS_TOKEN) vars.DIW_VERIFIER_ACCESS_TOKEN = env.VERIFIER_ACCESS_TOKEN;
-    if (env.TWFIDO_ENVIRONMENT) vars.DIW_TWFIDO_ENVIRONMENT = env.TWFIDO_ENVIRONMENT;
-    if (env.TWFIDO_SERVICE_ID) vars.DIW_TWFIDO_SERVICE_ID = env.TWFIDO_SERVICE_ID;
-    if (env.TWFIDO_TOKEN_SHA256) vars.DIW_TWFIDO_TOKEN_SHA256 = env.TWFIDO_TOKEN_SHA256;
-    if (env.TWFIDO_AES_KEY) vars.DIW_TWFIDO_AES_KEY = env.TWFIDO_AES_KEY;
+    if (typeof env.SERVER_CONF === "string" && env.SERVER_CONF.trim()) vars.DIW_CONFIG_TEXT = env.SERVER_CONF;
+    for (const [name, value] of Object.entries(env)) {
+      if (name.startsWith("DIW_") && typeof value === "string" && name !== "DIW_SERVER") vars[name] = value;
+    }
     this.envVars = vars;
   }
 }

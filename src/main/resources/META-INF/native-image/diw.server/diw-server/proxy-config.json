@@ -1,0 +1,12 @@
+[
+  {
+    "interfaces": [
+      "diw.wallet.core.zk.native.bindings.IntegrityCheckingUniffiLib"
+    ]
+  },
+  {
+    "interfaces": [
+      "diw.wallet.core.zk.native.bindings.UniffiLib"
+    ]
+  }
+]

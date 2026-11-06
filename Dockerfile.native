@@ -1,0 +1,19 @@
+# Experimental image with the GraalVM native executable instead of the JVM distribution: build it first with
+# GRAALVM_HOME set and ./gradlew nativeCompile (CI does this). Same settings, platform and volume as Dockerfile; it
+# answers /healthz about 0.2 s after start and idles near 80 MB (relay only). The JVM image stays the default.
+FROM ubuntu:24.04
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --home-dir /var/lib/diw-server --shell /usr/sbin/nologin diw \
+    && mkdir -p /var/lib/diw-server && chown diw:diw /var/lib/diw-server
+COPY build/native/nativeCompile/diw-server /opt/diw-server/bin/diw-server
+COPY deploy /opt/diw-server/deploy
+COPY README.md LICENSE /opt/diw-server/
+USER diw
+ENV DIW_PLATFORM=container
+VOLUME /var/lib/diw-server
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+ENTRYPOINT ["/opt/diw-server/bin/diw-server"]

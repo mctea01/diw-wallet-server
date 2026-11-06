@@ -26,7 +26,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.websocket.close
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
+import io.ktor.server.cio.CIO
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -198,10 +198,29 @@ class ZkTlsHostTest {
         ZkTlsTarget(responder = ZkTlsRecordPage::respond).use { target ->
             val port = ServerSocket(0).use { it.localPort }
             val url = "http://localhost:$port"
-            val server = server(config(url, extra = mapOf("zktls_templates_file" to packFile(target.port).path)), listOf(target.caDer), available = null)
-            val engine = embeddedServer(Netty, port = port, host = "127.0.0.1") { module(server) }.start(wait = false)
+            val pack = packFile(target.port)
+            // -Pdiw.nativeServer=<executable> runs this proof against the GraalVM native image instead of this JVM.
+            val native = System.getProperty("diw.nativeServer")?.takeIf { it.isNotBlank() }
+            val engine = if (native != null) null else {
+                val server = server(config(url, extra = mapOf("zktls_templates_file" to pack.path)), listOf(target.caDer), available = null)
+                embeddedServer(CIO, port = port, host = "127.0.0.1") { module(server) }.start(wait = false)
+            }
+            val process = native?.let { exe ->
+                val data = dir()
+                val keys = File(data, "pack-keys.pem").apply { writeText(packKey.publicKey.toPem()) }
+                val roots = File(data, "roots.pem").apply { writeText(org.multipaz.crypto.X509Cert(kotlinx.io.bytestring.ByteString(target.caDer)).toPem()) }
+                val settings = listOf(
+                    "DIW_PUBLIC_URL=$url", "DIW_FEATURES=zktls", "DIW_ZKTLS_TOKEN_SHA256=$tokenHash", "DIW_DATA_DIR=${data.path}",
+                    "DIW_LISTEN_PORT=$port", "DIW_ZKTLS_TEMPLATES_FILE=${pack.path}", "DIW_ZKTLS_TEMPLATE_KEYS_FILE=${keys.path}",
+                    "DIW_ZKTLS_EXTRA_ROOTS_FILE=${roots.path}",
+                ).joinToString("\n")
+                ProcessBuilder(exe).inheritIO().also { it.environment()["DIW_CONFIG_TEXT"] = settings }.start()
+            }
             val http = HttpClient(Java)
             try {
+                if (process != null) withTimeout(30_000) {
+                    while (runCatching { http.get("$url/zktls/profiles").bodyAsText() }.getOrNull()?.contains(ZkTlsRecordPage.PROFILE_ID) != true) delay(100)
+                }
                 val created = http.post("$url/zktls/sessions") {
                     header("Authorization", "Bearer $token")
                     contentType(ContentType.Application.Json)
@@ -235,7 +254,8 @@ class ZkTlsHostTest {
                 File("/proc/self/status").takeIf { it.isFile }?.readLines()?.firstOrNull { it.startsWith("VmHWM") }?.let { println("zkTLS host test peak: $it") }
             } finally {
                 http.close()
-                engine.stop(100, 500)
+                engine?.stop(100, 500)
+                process?.destroy()
             }
         }
     }

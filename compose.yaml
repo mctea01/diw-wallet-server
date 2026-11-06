@@ -1,21 +1,17 @@
 # Production deployment: the server behind Caddy, which obtains and renews the TLS certificate by itself.
-# Fill in .env (see .env.example), then: docker compose up -d
+# Both read ./server.conf, the same settings file a manual install uses (cp deploy/server.conf.example server.conf,
+# set DIW_PUBLIC_URL and DIW_ACME_EMAIL). Optional .env: DIW_VERSION (image tag), DIW_MEMORY_LIMIT, DIW_JAVA_OPTS.
+# Then: docker compose up -d
 services:
   server:
     image: ghcr.io/mctea01/diw-wallet-server:${DIW_VERSION:-latest}
     restart: unless-stopped
+    env_file:
+      - path: ./server.conf
+        required: true
     environment:
-      DIW_PUBLIC_URL: https://${DIW_DOMAIN:?set DIW_DOMAIN in .env}
-      DIW_FEATURES: ${DIW_FEATURES:-relay}
-      # Needed when DIW_FEATURES has zktls: SHA-256 of the access token (docker compose run --rm server hash-token).
-      DIW_ZKTLS_TOKEN_SHA256: ${DIW_ZKTLS_TOKEN_SHA256:-}
-      # Needed when DIW_FEATURES has twfido: the SP account from the Ministry of the Interior and the access token hash.
-      DIW_TWFIDO_ENVIRONMENT: ${DIW_TWFIDO_ENVIRONMENT:-production}
-      DIW_TWFIDO_SERVICE_ID: ${DIW_TWFIDO_SERVICE_ID:-}
-      DIW_TWFIDO_AES_KEY: ${DIW_TWFIDO_AES_KEY:-}
-      DIW_TWFIDO_TOKEN_SHA256: ${DIW_TWFIDO_TOKEN_SHA256:-}
-      # The port is reachable only from Caddy on this network, so its forwarded client address is trusted.
-      DIW_TRUST_FORWARDED: "true"
+      # Only defaults change with the platform: listen on 0.0.0.0 and trust Caddy's forwarded client address.
+      DIW_PLATFORM: compose
       JAVA_OPTS: ${DIW_JAVA_OPTS:--Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m}
     volumes:
       - server-data:/var/lib/diw-server
@@ -36,9 +32,11 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    # DIW_PUBLIC_URL names the site and DIW_ACME_EMAIL the certificate contact.
+    env_file:
+      - path: ./server.conf
+        required: true
     environment:
-      DIW_DOMAIN: ${DIW_DOMAIN}
-      DIW_ACME_EMAIL: ${DIW_ACME_EMAIL:?set DIW_ACME_EMAIL in .env}
       DIW_UPSTREAM: server:8080
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro

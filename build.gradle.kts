@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.graalvm.native)
     application
 }
 
@@ -25,8 +26,7 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.serialization.json)
     implementation(libs.ktor.server.core)
-    implementation(libs.ktor.server.netty)
-    implementation(platform(libs.netty.bom))
+    implementation(libs.ktor.server.cio)
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.forwarded.header)
     implementation(libs.ktor.client.java)
@@ -106,6 +106,38 @@ tasks.jar {
 
 tasks.test {
     useJUnitPlatform()
+    // -Pdiw.nativeServer=build/native/nativeCompile/diw-server runs the zkTLS end-to-end test against the native image.
+    (findProperty("diw.nativeServer") as String?)?.let { systemProperty("diw.nativeServer", file(it).absolutePath) }
     jvmArgs("-Dfile.encoding=UTF-8")
     testLogging { events("passed", "failed", "skipped") }
+}
+
+// GraalVM native image (experimental; the JVM distribution stays the default). `./gradlew nativeCompile` with
+// GRAALVM_HOME set writes build/native/nativeCompile/diw-server. The reachability metadata under
+// src/main/resources/META-INF/native-image comes from the tracing agent over the tests (`./gradlew -Pagent test
+// metadataCopy`); refresh it when dependencies change. The native proof library is loaded through JNA as on the JVM.
+graalvmNative {
+    toolchainDetection.set(false)
+    metadataRepository { enabled.set(true) }
+    binaries.named("main") {
+        imageName.set("diw-server")
+        mainClass.set("diw.server.MainKt")
+        buildArgs.addAll(
+            "--no-fallback",
+            "-march=compatibility",
+            "-H:+ReportExceptionStackTraces",
+            "--enable-url-protocols=http,https",
+            "-Dfile.encoding=UTF-8",
+            "-H:IncludeLocales=en,zh",
+        )
+        resources.autodetect()
+    }
+    agent {
+        defaultMode.set("standard")
+        metadataCopy {
+            inputTaskNames.add("test")
+            outputDirectories.add("src/main/resources/META-INF/native-image/diw.server/diw-server")
+            mergeWithExisting.set(true)
+        }
+    }
 }
