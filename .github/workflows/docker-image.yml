@@ -18,7 +18,7 @@ env:
   JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
   # The zkTLS verifier host needs TLSNotary; OpenAC serves bonds_age_verify. A missing toolchain fails the build.
   DIW_ZK_NATIVE: require
-  DIW_ZK_FEATURES: openac,tlsn
+  DIW_ZK_FEATURES: openac,tlsn,oprf
 
 jobs:
   build:
@@ -170,3 +170,4 @@ jobs:
           # The build job creates the release; wait for it, then add the executable.
           for i in $(seq 1 30); do gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && break; sleep 10; done
           gh release upload "${GITHUB_REF_NAME}" "diw-server-${GITHUB_REF_NAME#v}-native" --clobber
+          
