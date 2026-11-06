@@ -9,7 +9,7 @@
 # --- General ---
 # Address wallets use, e.g. https://diw.example.org; session links, relay and web verifier URLs are built from it.
 DIW_PUBLIC_URL=https://diw.example.org
-# Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation. Default: relay.
+# Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf. Default: relay.
 # DIW_FEATURES=relay
 # Contact address for the certificate authority; read by the bundled Caddy configuration, not by the server.
 # DIW_ACME_EMAIL=admin@example.org
@@ -115,3 +115,15 @@ DIW_PUBLIC_URL=https://diw.example.org
 # DIW_FEDERATION_SUBORDINATES_FILE=
 # Validity of the statements this server signs. Default: 24.
 # DIW_FEDERATION_LIFETIME_HOURS=24
+
+# --- Project OPRF for zkPassport salted identifiers (features=oprf) ---
+# OPRF key, a BabyJubJub scalar (diw-server oprf-keygen prints one); required with oprf. Secret.
+# DIW_OPRF_KEY=
+# Id published with the public key; change it when the key is rotated. Default: 1.
+# DIW_OPRF_KEY_ID=1
+# SHA-256 of the evaluation access tokens; defaults to zktls_token_sha256.
+# DIW_OPRF_TOKEN_SHA256=
+# Evaluations from one client address per hour. Default: 20.
+# DIW_OPRF_PER_ADDRESS=20
+# Evaluations in all per hour. Default: 2000.
+# DIW_OPRF_TOTAL=2000
