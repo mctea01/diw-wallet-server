@@ -3,7 +3,10 @@ package diw.server
 import diw.wallet.core.util.DiwJson
 import diw.wallet.core.zkpassport.ZkPassportProver
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.header
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -190,7 +193,8 @@ class ZkPassportHost(
     }
 
     companion object {
-        const val MAX_BODY = 256 shl 10
+        /** Room for two base64 chip files, sealed once more by a paired wallet. */
+        const val MAX_BODY = 512 shl 10
         private const val MAX_FILE = 64 shl 10
         private val DOMAIN = Regex("^[A-Za-z0-9.:-]{1,253}$")
         private val VERSION = Regex("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$")
@@ -221,41 +225,92 @@ class ZkPassportHost(
     }
 }
 
-fun Route.zkPassportRoutes(host: ZkPassportHost, tokenHashes: List<ByteArray>, scope: CoroutineScope) {
-    suspend fun io.ktor.server.application.ApplicationCall.authorized(): Boolean {
-        if (bearerMatches(request.header("Authorization"), tokenHashes)) return true
-        respondError(HttpStatusCode.Unauthorized, "unauthorized", "這台服務端的 zkPassport 證明器需要存取權杖")
-        return false
+// Pairing checks the connection's own peer address: the config refuses pairing behind a proxy (trust_forwarded).
+/** How a call got in: a token answers in plain JSON, a paired session in sealed JSON (DESIGN 3.10). */
+private class Caller(val seal: ZkPassportPairing.Seal?) {
+    fun open(body: JsonObject): JsonObject? = if (seal == null) body else seal.open(body)
+    fun out(body: JsonObject): JsonObject = seal?.seal(body) ?: body
+}
+
+fun Route.zkPassportRoutes(host: ZkPassportHost, tokenHashes: List<ByteArray>, pairing: ZkPassportPairing?, scope: CoroutineScope) {
+    suspend fun ApplicationCall.caller(): Caller? {
+        val header = request.header("Authorization")
+        if (bearerMatches(header, tokenHashes)) return Caller(null)
+        if (pairing != null && ZkPassportPairing.privateAddress(request.local.remoteAddress)) {
+            pairing.authorize(header, request.httpMethod.value, request.path())?.let { return Caller(it) }
+        }
+        respondError(HttpStatusCode.Unauthorized, "unauthorized", "這台服務端的 zkPassport 證明器需要存取權杖或配對")
+        return null
     }
-    suspend fun io.ktor.server.application.ApplicationCall.unavailable(): Boolean {
+    suspend fun ApplicationCall.unavailable(): Boolean {
         if (host.isAvailable) return false
         respondError(HttpStatusCode.ServiceUnavailable, "unavailable", "The native library has no UltraHonk prover")
         return true
     }
+    suspend fun ApplicationCall.body(): JsonObject? =
+        receiveLimited(ZkPassportHost.MAX_BODY)?.let { runCatching { DiwJson.parseToJsonElement(it) as JsonObject }.getOrNull() }
+
+    if (pairing != null) {
+        post("/zkpassport/v1/pair") {
+            if (!ZkPassportPairing.privateAddress(call.request.local.remoteAddress)) {
+                call.respondError(HttpStatusCode.Forbidden, "forbidden", "Pairing is only open to private networks")
+                return@post
+            }
+            val o = call.body()
+            val nonce = ZkPassportPairing.decode((o?.get("nonce") as? JsonPrimitive)?.contentOrNull)
+            val mac = ZkPassportPairing.decode((o?.get("mac") as? JsonPrimitive)?.contentOrNull)
+            if (nonce == null || mac == null) {
+                call.respondError(HttpStatusCode.BadRequest, "invalid_request", "Malformed request")
+                return@post
+            }
+            when (val r = pairing.pair(nonce, mac)) {
+                is ZkPassportPairing.Paired.Ok -> call.respondJson(buildJsonObject {
+                    put("session", r.session)
+                    put("nonce", r.nonce)
+                })
+                ZkPassportPairing.Paired.Refused -> call.respondError(HttpStatusCode.Unauthorized, "unauthorized", "Wrong pairing code")
+                ZkPassportPairing.Paired.Gone -> call.respondError(HttpStatusCode.Gone, "pairing_used", "The pairing code was used or expired; show a new one")
+            }
+        }
+        // A new code for whoever runs the server, on the host itself.
+        post("/zkpassport/v1/links") {
+            if (ZkPassportPairing.loopback(call.request.local.remoteAddress)) {
+                call.respondJson(buildJsonObject { put("link", pairing.newLink()) })
+            } else {
+                call.respondError(HttpStatusCode.Forbidden, "forbidden", "New pairing codes are only given on the host itself")
+            }
+        }
+        delete("/zkpassport/v1/pair") {
+            val caller = call.caller() ?: return@delete
+            pairing.end(call.request.header("Authorization"))
+            call.respondJson(caller.out(buildJsonObject { put("state", "ended") }))
+        }
+    }
     post("/zkpassport/v1/jobs") {
-        if (!call.authorized() || call.unavailable()) return@post
-        val o = call.receiveLimited(ZkPassportHost.MAX_BODY)?.let { runCatching { DiwJson.parseToJsonElement(it) as JsonObject }.getOrNull() }
+        val caller = call.caller() ?: return@post
+        if (call.unavailable()) return@post
+        val o = call.body()?.let(caller::open)
         if (o == null) {
             call.respondError(HttpStatusCode.BadRequest, "invalid_request", "Malformed request")
             return@post
         }
         when (val r = host.submit(o, scope)) {
-            is ZkPassportHost.Submitted.Ok -> call.respondJson(buildJsonObject { put("id", r.id) }, HttpStatusCode.Accepted)
+            is ZkPassportHost.Submitted.Ok -> call.respondJson(caller.out(buildJsonObject { put("id", r.id) }), HttpStatusCode.Accepted)
             ZkPassportHost.Submitted.Invalid -> call.respondError(HttpStatusCode.BadRequest, "invalid_request", "Malformed request")
             ZkPassportHost.Submitted.Busy -> call.respondError(HttpStatusCode.TooManyRequests, "busy", "Too many jobs waiting")
         }
     }
     get("/zkpassport/v1/jobs/{id}") {
-        if (!call.authorized()) return@get
+        val caller = call.caller() ?: return@get
         val id = call.parameters["id"]
         val state = id?.takeIf(ZkPassportHost::validId)?.let(host::status)
         if (state == null) call.respondError(HttpStatusCode.NotFound, "unknown_job", "No such job")
-        else call.respondJson(state)
+        else call.respondJson(caller.out(state))
     }
     delete("/zkpassport/v1/jobs/{id}") {
-        if (!call.authorized()) return@delete
+        val caller = call.caller() ?: return@delete
         val id = call.parameters["id"]
-        if (id != null && ZkPassportHost.validId(id) && host.cancel(id)) call.respondJson(buildJsonObject { put("state", "cancelled") })
+        if (id != null && ZkPassportHost.validId(id) && host.cancel(id)) call.respondJson(caller.out(buildJsonObject { put("state", "cancelled") }))
         else call.respondError(HttpStatusCode.NotFound, "unknown_job", "No such job")
     }
 }

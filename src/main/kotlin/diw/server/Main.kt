@@ -176,6 +176,9 @@ class Server(
         available = { ultraHonk },
     )
 
+    /** One-time QR pairing for wallets on a private network (DESIGN 3.10). */
+    val zkPassportPairing: ZkPassportPairing? = if (zkPassport != null && config.zkPassportPairing) ZkPassportPairing(config.publicUrl) else null
+
     /**
      * Whether every enabled feature can run: zktls needs TLSNotary, oprf the OPRF and zkpassport UltraHonk in the
      * native library.
@@ -284,7 +287,12 @@ fun Application.module(server: Server) {
                 // The OPRF key verifiers accept salted identifiers under (its hash is the circuits' oprf_pk_hash).
                 server.oprf?.publicKey?.let { pk -> put("oprf", buildJsonObject { put("keyId", server.oprf.keyId); put("pk", pk) }) }
                 // Whether this server can prove zkPassport requests for its owner's wallet (DESIGN 3.9).
-                server.zkPassport?.let { put("zkpassport", buildJsonObject { put("available", it.isAvailable) }) }
+                server.zkPassport?.let {
+                    put("zkpassport", buildJsonObject {
+                        put("available", it.isAvailable)
+                        put("pairing", server.zkPassportPairing != null)
+                    })
+                }
                 // Equal on every deployment with the same service settings (ServerConfig.settingsDigest).
                 put("settingsSha256", server.config.settingsDigest())
                 put("platform", server.config.platform.id)
@@ -306,14 +314,14 @@ fun Application.module(server: Server) {
         server.twFido?.let { twFidoRoutes(it, server.config.twFidoTokenHashes) }
         server.federation?.let { federationRoutes(it) }
         server.oprf?.let { oprfRoutes(it, server.config.oprfTokenHashes) }
-        server.zkPassport?.let { zkPassportRoutes(it, server.config.zkPassportTokenHashes, server.jobs) }
+        server.zkPassport?.let { zkPassportRoutes(it, server.config.zkPassportTokenHashes, server.zkPassportPairing, server.jobs) }
     }
 }
 
 private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | oprf-keygen | config | " +
-    "config-template | federation-jwks | federation-enroll <entity_id>]"
+    "config-template | federation-jwks | federation-enroll <entity_id> | prover [--port <port>] [--address <ip>]]"
 
-private fun fail(message: String): Nothing {
+internal fun fail(message: String): Nothing {
     System.err.println("diw-server: $message")
     exitProcess(2)
 }
@@ -335,7 +343,9 @@ private fun loadConfig(): ServerConfig = try {
  * - `config-template` prints the settings file every deployment uses (deploy/server.conf.example);
  * - `federation-jwks` prints this server's federation keys, for the superior that enrols it;
  * - `federation-enroll <entity_id>` fetches and checks a subordinate's Entity Configuration and prints the entry to
- *   add to federation_subordinates_file after comparing the key thumbprints with its operator.
+ *   add to federation_subordinates_file after comparing the key thumbprints with its operator;
+ * - `prover` runs a temporary zkPassport prover for wallets on this network, paired by a one-time QR code
+ *   (DESIGN 3.10, ProverCommand.kt).
  */
 private fun command(args: Array<String>): Boolean {
     when (args.firstOrNull()) {
@@ -391,6 +401,7 @@ private fun command(args: Array<String>): Boolean {
             println("# settings digest ${config.settingsDigest()}")
         }
         "config-template" -> print(ConfigKeys.template())
+        "prover" -> runProver(args.drop(1))
         "federation-jwks" -> {
             val config = loadConfig()
             if (!config.dataDir.isDirectory && !config.dataDir.mkdirs()) fail("cannot create data directory ${config.dataDir}")
@@ -444,5 +455,7 @@ fun main(args: Array<String>) {
             log.warn("public_url host {} does not resolve: wallets are sent to this address, set public_url to the name clients use", publicHost)
         }
     }.apply { isDaemon = true }.start()
+    // The code itself never goes to the log; only the host can ask for one.
+    if (server.zkPassportPairing != null) log.info("zkPassport pairing is on: POST /zkpassport/v1/links from this host returns a one-time code")
     embeddedServer(CIO, port = config.listenPort, host = config.listenHost) { module(server) }.start(wait = true)
 }

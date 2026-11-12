@@ -19,6 +19,7 @@
 | 行動自然人憑證簽署 | v1（可選） | `/twfido/sign`，以服務端的 SP 帳號向內政部要求簽署，SP 金鑰不放進 App | 可 |
 | 本專案 OPRF | v1（可選） | `/oprf/v1/key`、`/oprf/v1/evaluate`，zkPassport 加鹽唯一識別碼的單一金鑰 OPRF，金鑰不放進 App | 可（每次評估為一次純量乘法與證明） |
 | 自己的 zkPassport 證明器 | v1（可選） | `/zkpassport/v1/jobs`，替使用者自己的錢包產生 zkPassport 回應證明；主機會看到 SOD 與 DG1（不含照片） | 不保證，記憶體高峰視 DSC 簽章演算法而定 |
+| 臨時證明器 | v1（可選） | `diw-server prover`，內網限定、一次性 QR 配對與加密傳輸，不需設定檔與權杖 | 同上 |
 | 信任聯盟 | v1（可選） | `/.well-known/openid-federation`，OpenID Federation 1.0 的 Entity Configuration；可當上級（`/federation/fetch`、`/federation/list`） | 可 |
 
 ## 2. 技術選擇
@@ -163,6 +164,20 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 需要原生程式庫的 UltraHonk（`DIW_ZK_FEATURES` 含 `zkpdf`）與 CRS；啟動時下載 CRS 到資料目錄。缺少時 `/zkpassport/*` 與 `/healthz` 回 503。
 - 資源：證明期間的記憶體高峰取決於 DSC 的簽章演算法（RSA-4096 的電路最大），1 GB 主機可能不夠；`/info` 的 `zkpassport` 只表示功能可用，不保證記憶體足夠。
 - 部署建議：與給其他錢包共用的正式服務端分開，另跑一個只開 `zkpassport` 的實例（同一映像，各自一份 `server.conf`），放在記憶體較大或只在需要時啟動的主機（家用電腦、Cloud Run）。理由：正式服務端的權杖與網址會分享給他人，護照資料不應送到多人使用的主機；證明的記憶體高峰可能讓同一主機的中繼、zkTLS 與 OPRF 被系統終止；OPRF 金鑰等秘密也不必與證明器放在同一台。錢包端把證明器設成獨立的服務端項目，不沿用正式服務端的設定。
+
+### 3.10 臨時證明器與一次性配對（`diw-server prover`）
+
+2026-11-12 使用者提出：多數人不會設定服務端，只是在家用電腦臨時開一個證明器、在內網直接使用，也不一定會設定權杖。所以證明器另有「配對模式」，以 QR Code 承載一次性的配對碼，不需要設定檔與權杖。
+
+- 啟動：`diw-server prover [--port 8090] [--address <內網 IP>]`。不讀 `server.conf`，只開 `zkpassport` 並設 `zkpassport_pairing=true`，聽所有介面，`public_url` 為自動找到的內網位址（優先 192.168.x、10.x，略過 docker 等虛擬網卡）。`DIW_DATA_DIR`（預設 `~/.diw-server`）保存 CRS，`DIW_ZKPASSPORT_RPC`、`DIW_ZKPASSPORT_SEPOLIA_RPC`、`DIW_ZKPASSPORT_QUEUE` 照常適用。終端機印出 QR Code 與連結（不寫入 log），按 Enter 產生新的，Ctrl+C 結束時所有工作階段與工作一併消失。
+- 一般部署也可設 `zkpassport_pairing=true`：主機本機以 `POST /zkpassport/v1/links`（只接受 loopback）取得新的配對碼。配對模式只接受直接連線，`trust_forwarded=true`（放在代理後面）時拒絕啟動，因為經過代理時每個請求都像來自內網。
+- 只回應私有位址：loopback、RFC 1918、連結本地、IPv6 ULA（fc00::/7）與 100.64.0.0/10（Tailscale 等）；以連線本身的位址判斷，不看 X-Forwarded-For。路由器即使把埠轉發出去，網際網路上的請求也一律拒絕。
+- 配對碼：`diw-prover://v1?u=<證明器網址>&p=<32 bytes base64url>`，10 分鐘內有效，用過一次即失效，新的配對碼會取代未用的舊碼。配對秘密不會在網路上傳送：
+  1. 錢包 `POST /zkpassport/v1/pair` `{nonce, mac}`，`nonce` 為 16 bytes，`mac = HMAC-SHA256(p, "diw-prover pair v1" || nonce)`。
+  2. 服務端核對後回 `{session, nonce: 服務端 nonce}`，配對碼作廢；雙方各自算出 `K = HMAC-SHA256(p, "diw-prover session v1" || 錢包 nonce || 服務端 nonce)`。配對碼錯誤回 401，已用過或過期回 410。
+- 之後每個請求：`Authorization: DIW-Session <session>.<seal>`，`seal` 是以 K 做 AES-256-GCM 封裝的 `{n, m, p}`（遞增計數、方法、路徑，AAD `"diw-prover auth v1 <session>"`）；計數必須大於上一個，方法與路徑必須相符，所以截到的請求無法重送或改用到別的路徑。請求與回應本文為 `{sealed}`，AAD 分別為 `"<session> <n> request"` 與 `"<session> <n> response"`。內網即使是明文 HTTP，旁人也看不到護照資料、結果或可重用的憑證。
+- 工作階段只在記憶體，閒置 30 分鐘或程序結束即消失；`DELETE /zkpassport/v1/pair` 由錢包主動結束。權杖模式（3.9）同時可用，兩者共用同一個工作佇列。
+- 錢包端（#121 合併後）：掃描配對碼後把證明器當成臨時的服務端項目，只保留工作階段，不存配對碼；同意畫面標示資料會送到哪個內網位址。工作階段失效時請使用者重新掃描。
 
 ## 4. 金鑰與信任
 

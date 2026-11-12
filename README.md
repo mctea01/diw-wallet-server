@@ -12,6 +12,7 @@
 - **信任聯盟**（`/.well-known/openid-federation`，可選，`features` 加 `federation`）：以 OpenID Federation 1.0 發佈這台服務端的 Entity Configuration，在 `diw_wallet_server` 中繼資料中列出簽章根憑證指紋、網頁查驗端 DID、功能與設定摘要。錢包信任該聯盟的 Trust Anchor 時，加入服務端就不必再逐字比對指紋。設定 `federation_subordinates_file` 時，這台服務端也能當上級（Intermediate 或 Trust Anchor），提供 `/federation/fetch` 與 `/federation/list`。
 - **本專案 OPRF**（`/oprf/v1/*`，可選，`features` 加 `oprf`）：錢包以 zkPassport 電路產生「加鹽唯一識別碼」時使用的單一金鑰 OPRF（錢包 `docs/design/zkpassport.md` 5.5）。服務端只看到盲化後的點，看不到護照資料或私密 nullifier；金鑰只放在 secret，公鑰列在 `/oprf/v1/key` 與 `/info`。回答需要存取權杖，每個位址每小時有次數上限。需要含 `oprf` 的原生程式庫（錢包原生建置的 `zkpdf` 會一併開啟），否則 `/healthz` 回 503。
 - **自己的 zkPassport 證明器**（`/zkpassport/v1/jobs`，可選，`features` 加 `zkpassport`）：手機較慢或記憶體不足時，錢包把護照晶片的 SOD 與 DG1（不含照片 DG2）送到使用者自己的服務端產生 zkPassport 回應證明，再由手機送出。只接受持有專用權杖的請求（`zkpassport_token_sha256`，不沿用也不可等於可能分享出去的 zkTLS 權杖）；晶片資料與結果只放在記憶體，結果讀取一次即刪除，未讀取的 10 分鐘後刪除。一次證明一個，需要含 `zkpdf` 的原生程式庫（UltraHonk），否則 `/healthz` 回 503；記憶體高峰視護照簽章演算法而定，1 GB 主機可能不夠。建議與分享給他人的正式服務端分開，另跑一個只開 `zkpassport` 的實例。
+- **臨時證明器**（`diw-server prover`）：不需設定檔與權杖，在家用電腦執行後印出一次性的 QR Code，錢包掃描即可在同一個內網使用上面的證明器。只回應內網位址，配對碼用過一次即失效，之後的請求全部以配對時導出的金鑰加密並防止重送；關閉程式即結束。
 - **健康檢查**（`/healthz`）與**版本資訊**（`/info`，含設定摘要 `settingsSha256`）。
 
 zkPDF 證明器（S4）尚未實作。

@@ -12,6 +12,7 @@
 - `twfido` signs with this server's mobile citizen certificate SP account through the wallet's `TwFidoClient`; ID numbers, hints and signed bytes stay in memory and are never logged or echoed back.
 - `oprf` answers blinded OPRF queries for zkPassport salted identifiers with the key from `oprf_key` (a secret, never in the APK or logs); it needs `oprf` in the native library and only ever sees blinded points.
 - `zkpassport` proves zkPassport requests for the owner's wallet with core's `ZkPassportProver` (`ZkPassportHost.kt`); it takes SOD and DG1 only, keeps chip data and results in memory, drops a job once its outcome is read, uses the server's clock and RPC settings, and needs UltraHonk (`zkpdf`) in the native library.
+- `diw-server prover` (`ProverCommand.kt`, `ZkPassportPairing.kt`, DESIGN 3.10) pairs a wallet by a one-time QR code instead of a token: private peer addresses only (never behind a proxy), the code is printed to the terminal and never logged, later calls carry a sealed counter and sealed bodies.
 - Sized for a 1 GB host: keep memory bounded, never log request contents, disclosed values, tokens or keys.
 - Agents cannot push `.github/workflows/`; propose workflow changes as a full file for the user to paste into .github/workflows/docker-image.yml.
 - Tests use `runBlocking<Unit>` / `testApplication`; a test function must return Unit or JUnit skips it.
