@@ -96,9 +96,8 @@ object ConfigKeys {
             ConfigKey("oprf_total", "2000", "Evaluations in all per hour."),
         ),
         "Own zkPassport prover (features=zkpassport)" to listOf(
-            ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport unless pairing, and never one of zktls_token_sha256."),
+            ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport and never one of zktls_token_sha256."),
             ConfigKey("zkpassport_queue", "2", "Jobs that may wait behind the one being proved."),
-            ConfigKey("zkpassport_pairing", "false", "Let wallets on a private network pair with a one-time QR code (diw-server prover sets it; a running server prints a new code for POST /zkpassport/v1/links from loopback)."),
             ConfigKey("zkpassport_rpc", null, "Ethereum mainnet node for zkPassport's registries; defaults to the wallet's public node."),
             ConfigKey("zkpassport_sepolia_rpc", null, "Ethereum Sepolia node for test requests; defaults to the wallet's public node."),
         ),

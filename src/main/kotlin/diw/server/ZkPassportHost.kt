@@ -225,7 +225,7 @@ class ZkPassportHost(
     }
 }
 
-// Pairing checks the connection's own peer address: the config refuses pairing behind a proxy (trust_forwarded).
+// Pairing checks the connection's own peer address; diw-server prover's TLS front already admits private peers only.
 /** How a call got in: a token answers in plain JSON, a paired session in sealed JSON (DESIGN 3.10). */
 private class Caller(val seal: ZkPassportPairing.Seal?) {
     fun open(body: JsonObject): JsonObject? = if (seal == null) body else seal.open(body)
@@ -270,14 +270,6 @@ fun Route.zkPassportRoutes(host: ZkPassportHost, tokenHashes: List<ByteArray>, p
                 })
                 ZkPassportPairing.Paired.Refused -> call.respondError(HttpStatusCode.Unauthorized, "unauthorized", "Wrong pairing code")
                 ZkPassportPairing.Paired.Gone -> call.respondError(HttpStatusCode.Gone, "pairing_used", "The pairing code was used or expired; show a new one")
-            }
-        }
-        // A new code for whoever runs the server, on the host itself.
-        post("/zkpassport/v1/links") {
-            if (ZkPassportPairing.loopback(call.request.local.remoteAddress)) {
-                call.respondJson(buildJsonObject { put("link", pairing.newLink()) })
-            } else {
-                call.respondError(HttpStatusCode.Forbidden, "forbidden", "New pairing codes are only given on the host itself")
             }
         }
         delete("/zkpassport/v1/pair") {

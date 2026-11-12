@@ -36,16 +36,17 @@ class ZkPassportPairingTest {
     private val b64 = Base64.getUrlEncoder().withoutPadding()
     private val b64d = Base64.getUrlDecoder()
 
-    private fun config(extra: Map<String, String> = emptyMap()) = ServerConfig.from(
+    private fun config(pairing: Boolean = true) = ServerConfig.from(
         mapOf(
-            "public_url" to "http://192.168.1.20:8090", "features" to "zkpassport", "zkpassport_pairing" to "true",
-            "listen_host" to "0.0.0.0", "trust_forwarded" to "false",
+            "public_url" to "https://192.168.1.20:8090", "features" to "zkpassport",
+            "listen_host" to "127.0.0.1", "trust_forwarded" to "false",
             "data_dir" to kotlin.io.path.createTempDirectory("diw-pairing").toString(),
-        ) + extra,
+        ),
+        pairing,
     )
 
     @Test
-    fun onlyPrivateAddressesAndDirectConnections() {
+    fun onlyPrivateAddressesAndATokenUnlessPairing() {
         for (a in listOf("127.0.0.1", "::1", "192.168.1.2", "10.1.2.3", "172.16.0.9", "100.100.1.1", "169.254.3.4", "fd12::1", "[fe80::1%eth0]")) {
             assertTrue(ZkPassportPairing.privateAddress(a), a)
         }
@@ -53,8 +54,7 @@ class ZkPassportPairingTest {
             assertFalse(ZkPassportPairing.privateAddress(a), a)
         }
         config()
-        assertFailsWith<IllegalArgumentException> { config(mapOf("trust_forwarded" to "true")) }
-        assertFailsWith<IllegalArgumentException> { config(mapOf("zkpassport_pairing" to "false")) }
+        assertFailsWith<IllegalArgumentException> { config(pairing = false) }
     }
 
     @Test
@@ -66,13 +66,15 @@ class ZkPassportPairingTest {
                 buildJsonObject { },
             )
         }
-        val server = Server(config(), zkPassportProving = proving, zkPassportAvailable = true)
+        val pin = ByteArray(32) { 7 }
+        val server = Server(config(), zkPassportProving = proving, zkPassportAvailable = true, zkPassportCertificateSha256 = pin)
         application { module(server) }
         fun json(r: String) = Json.parseToJsonElement(r).jsonObject
 
-        val link = json(client.post("/zkpassport/v1/links").bodyAsText())["link"]!!.jsonPrimitive.content
+        val link = server.zkPassportPairing!!.newLink()
         val query = URI(link).rawSchemeSpecificPart.substringAfter('?').split('&').associate { it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), Charsets.UTF_8) }
-        assertEquals("http://192.168.1.20:8090", query["u"])
+        assertEquals("https://192.168.1.20:8090", query["u"])
+        assertTrue(pin.contentEquals(b64d.decode(query["c"])))
         val secret = b64d.decode(query["p"])
 
         val nonce = ByteArray(16) { it.toByte() }
@@ -139,8 +141,30 @@ class ZkPassportPairingTest {
     }
 
     @Test
+    fun theTlsFrontServesTheCertificateTheCodePins() {
+        val tls = ProverTls.create("https://127.0.0.1:1")
+        val listener = tls.serve(0, 1)
+        try {
+            val trustAll = object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = emptyArray()
+            }
+            val context = javax.net.ssl.SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustAll), null) }
+            val socket = context.socketFactory.createSocket("127.0.0.1", listener.localPort) as javax.net.ssl.SSLSocket
+            socket.use {
+                it.startHandshake()
+                val leaf = it.session.peerCertificates.first().encoded
+                assertTrue(java.security.MessageDigest.getInstance("SHA-256").digest(leaf).contentEquals(tls.certificateSha256))
+            }
+        } finally {
+            listener.close()
+        }
+    }
+
+    @Test
     fun theQrCodeIsDrawnWithPlainEscapes() {
-        val qr = terminalQr("diw-prover://v1?u=http%3A%2F%2F192.168.1.20%3A8090&p=AAAA")
+        val qr = terminalQr("diw-prover://v1?u=https%3A%2F%2F192.168.1.20%3A8090&p=AAAA&c=AAAA")
         assertTrue(qr.lines().size > 20)
         assertTrue(qr.all { it.code < 128 })
     }

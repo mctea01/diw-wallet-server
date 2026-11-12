@@ -78,6 +78,8 @@ class Server(
     /** Replaces the zkPassport prover and its availability (tests without the native library). */
     zkPassportProving: ZkPassportProving? = null,
     zkPassportAvailable: Boolean? = null,
+    /** SHA-256 of the TLS certificate diw-server prover serves, carried in its pairing codes for the wallet to pin. */
+    zkPassportCertificateSha256: ByteArray? = null,
 ) {
     private val http by lazy { HttpClient(Java) }
     private val didTrust: DidTrust by lazy { didTrust ?: DidTrust(listOf(TwdiwTrustList(http))) }
@@ -177,7 +179,7 @@ class Server(
     )
 
     /** One-time QR pairing for wallets on a private network (DESIGN 3.10). */
-    val zkPassportPairing: ZkPassportPairing? = if (zkPassport != null && config.zkPassportPairing) ZkPassportPairing(config.publicUrl) else null
+    val zkPassportPairing: ZkPassportPairing? = if (zkPassport != null && config.zkPassportPairing) ZkPassportPairing(config.publicUrl, zkPassportCertificateSha256) else null
 
     /**
      * Whether every enabled feature can run: zktls needs TLSNotary, oprf the OPRF and zkpassport UltraHonk in the
@@ -455,7 +457,5 @@ fun main(args: Array<String>) {
             log.warn("public_url host {} does not resolve: wallets are sent to this address, set public_url to the name clients use", publicHost)
         }
     }.apply { isDaemon = true }.start()
-    // The code itself never goes to the log; only the host can ask for one.
-    if (server.zkPassportPairing != null) log.info("zkPassport pairing is on: POST /zkpassport/v1/links from this host returns a one-time code")
     embeddedServer(CIO, port = config.listenPort, host = config.listenHost) { module(server) }.start(wait = true)
 }

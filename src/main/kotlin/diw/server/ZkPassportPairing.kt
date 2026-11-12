@@ -30,6 +30,8 @@ import kotlin.time.Instant
  */
 class ZkPassportPairing(
     private val url: String,
+    /** SHA-256 of the TLS certificate the wallet pins (diw-server prover); null for plain HTTP. */
+    private val certificateSha256: ByteArray? = null,
     private val clock: () -> Instant = { Clock.System.now() },
     private val offerLifetime: Duration = 10.minutes,
     private val idle: Duration = 30.minutes,
@@ -46,7 +48,8 @@ class ZkPassportPairing(
     fun newLink(): String {
         val secret = ByteArray(32).also(random::nextBytes)
         offer = Offer(secret, clock() + offerLifetime)
-        return "diw-prover://v1?u=" + URLEncoder.encode(url, Charsets.UTF_8) + "&p=" + B64.encodeToString(secret)
+        return "diw-prover://v1?u=" + URLEncoder.encode(url, Charsets.UTF_8) + "&p=" + B64.encodeToString(secret) +
+            (certificateSha256?.let { "&c=" + B64.encodeToString(it) } ?: "")
     }
 
     sealed interface Paired {
@@ -165,8 +168,6 @@ class ZkPassportPairing(
                 else -> false
             }
         }
-
-        fun loopback(address: String): Boolean = literal(address)?.isLoopbackAddress == true
 
         /** An IP literal; a name is never resolved. */
         private fun literal(address: String): InetAddress? {

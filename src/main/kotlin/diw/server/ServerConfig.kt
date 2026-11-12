@@ -174,7 +174,6 @@ data class ServerConfig(
             "oprf_total" to oprf.total.toString(),
             "zkpassport_token_sha256" to hex(zkPassportTokenHashes),
             "zkpassport_queue" to zkPassportQueue.toString(),
-            "zkpassport_pairing" to zkPassportPairing.toString(),
             "zkpassport_rpc" to zkPassportRpc,
             "zkpassport_sepolia_rpc" to zkPassportSepoliaRpc,
         )
@@ -259,7 +258,8 @@ data class ServerConfig(
             return from(values).copy(sources = sources, platform = platform)
         }
 
-        fun from(values: Map<String, String>): ServerConfig {
+        /** [pairing] is set by `diw-server prover` only (DESIGN 3.10): wallets pair by QR code instead of a token. */
+        fun from(values: Map<String, String>, pairing: Boolean = false): ServerConfig {
             values.keys.firstOrNull { it !in ConfigKeys.names }?.let { throw IllegalArgumentException("Unknown setting: $it") }
             fun str(key: String): String? = values[key]?.trim()?.takeIf { it.isNotEmpty() }
             fun int(key: String, default: Int, range: IntRange): Int {
@@ -324,16 +324,11 @@ data class ServerConfig(
             // No fallback to zktls_token_sha256: that token may be shared with other wallets, and passport data must
             // reach only the owner's prover.
             val zkPassportTokens = hashes("zkpassport_token_sha256")
-            val zkPassportPairing = bool("zkpassport_pairing", false)
             val trustForwarded = bool("trust_forwarded", listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost")
-            // Behind a proxy every caller arrives from the proxy's private address, so pairing would let the internet in.
-            require(!(FEATURE_ZKPASSPORT in features && zkPassportPairing && trustForwarded)) {
-                "zkpassport_pairing takes direct connections only: set trust_forwarded=false and do not put it behind a proxy"
-            }
             if (FEATURE_ZKPASSPORT in features) {
                 // Pairing lets wallets in with a one-time QR code instead (DESIGN 3.10).
-                require(zkPassportTokens.isNotEmpty() || zkPassportPairing) {
-                    "The zkpassport feature needs zkpassport_token_sha256 (diw-server hash-token prints it) or zkpassport_pairing"
+                require(zkPassportTokens.isNotEmpty() || pairing) {
+                    "The zkpassport feature needs zkpassport_token_sha256 (diw-server hash-token prints it)"
                 }
                 require(zkPassportTokens.none { t -> tokenHashes.any { it.contentEquals(t) } }) {
                     "zkpassport_token_sha256 must differ from zktls_token_sha256, which may be shared with other wallets"
@@ -416,7 +411,7 @@ data class ServerConfig(
                 ),
                 zkPassportTokenHashes = zkPassportTokens,
                 zkPassportQueue = int("zkpassport_queue", 2, 0..16),
-                zkPassportPairing = zkPassportPairing,
+                zkPassportPairing = pairing,
                 zkPassportRpc = str("zkpassport_rpc")?.let { httpsUrl("zkpassport_rpc", it) },
                 zkPassportSepoliaRpc = str("zkpassport_sepolia_rpc")?.let { httpsUrl("zkpassport_sepolia_rpc", it) },
             )
