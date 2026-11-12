@@ -159,7 +159,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 - 證明沿用錢包 core 的 `ZkPassportProver`（官方 Rust 輸入產生與 driver，電路逐一核對 vkey 雜湊後才執行），與手機上完全相同；不需要 DG2，DG2 雜湊取自 SOD。
 - 晶片資料與結果只存在記憶體中的工作物件，不寫入磁碟或 log；工作識別碼為 128 位元亂數。完成或失敗的結果被讀取一次後刪除，未讀取的工作 10 分鐘後刪除。
-- 一次只跑一個工作，等待中的工作最多 `zkpassport_queue`（預設 2），超過回 429。權杖只存 SHA-256，必須設定專用的 `zkpassport_token_sha256`，且不可與 `zktls_token_sha256` 相同（啟動失敗）：zkTLS 權杖可能隨分享連結給了其他錢包，護照資料只能送進擁有者自己的證明器。
+- 一次只跑一個工作，等待中的工作最多 `zkpassport_queue`（預設 2），已完成但未讀取的結果最多 4 個，超過都回 429；工作結束時立即釋放晶片資料，取消會立即通知原生證明器。權杖只存 SHA-256，必須設定專用的 `zkpassport_token_sha256`，且不可與 `zktls_token_sha256` 相同（啟動失敗）：zkTLS 權杖可能隨分享連結給了其他錢包，護照資料只能送進擁有者自己的證明器。
 - 以太坊節點由服務端設定（`zkpassport_rpc`、`zkpassport_sepolia_rpc`，未設定用錢包內建的公開節點），不接受請求指定網址。不使用 OPRF（回應時不加鹽，與手機相同）。
 - 需要原生程式庫的 UltraHonk（`DIW_ZK_FEATURES` 含 `zkpdf`）與 CRS；啟動時下載 CRS 到資料目錄。缺少時 `/zkpassport/*` 與 `/healthz` 回 503。
 - 資源：證明期間的記憶體高峰取決於 DSC 的簽章演算法（RSA-4096 的電路最大），1 GB 主機可能不夠；`/info` 的 `zkpassport` 只表示功能可用，不保證記憶體足夠。
