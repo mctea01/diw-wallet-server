@@ -13,7 +13,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -51,6 +53,9 @@ class ZkPassportHostTest {
         put("scope", "demo")
         put("dev_mode", false)
     }.toString()
+
+    /** A real pause: testApplication may skip delay() in virtual time while the job runs on real threads. */
+    private suspend fun pause() = withContext(Dispatchers.Default) { delay(20) }
 
     @Test
     fun theFeatureNeedsATokenHash() {
@@ -106,9 +111,9 @@ class ZkPassportHostTest {
         assertEquals(HttpStatusCode.OK, call("DELETE", "/zkpassport/v1/jobs/$second").status)
 
         var state = json(call("GET", "/zkpassport/v1/jobs/$id").bodyAsText())
-        for (i in 0 until 50) {
+        for (i in 0 until 250) {
             if (state["state"]!!.jsonPrimitive.content == "proving") break
-            delay(20)
+            pause()
             state = json(call("GET", "/zkpassport/v1/jobs/$id").bodyAsText())
         }
         assertEquals("proving", state["state"]!!.jsonPrimitive.content)
@@ -121,10 +126,10 @@ class ZkPassportHostTest {
         assertNull(job.oprf)
 
         release.complete(Unit)
-        for (i in 0 until 50) {
+        for (i in 0 until 250) {
             state = json(call("GET", "/zkpassport/v1/jobs/$id").bodyAsText())
             if (state["state"]!!.jsonPrimitive.content == "done") break
-            delay(20)
+            pause()
         }
         assertEquals("done", state["state"]!!.jsonPrimitive.content)
         val result = state["result"] as JsonObject
@@ -142,10 +147,10 @@ class ZkPassportHostTest {
             header("Authorization", "Bearer $token"); contentType(ContentType.Application.Json); setBody(request())
         }.bodyAsText()).jsonObject["id"]!!.jsonPrimitive.content
         var state: JsonObject = buildJsonObject { }
-        for (i in 0 until 50) {
+        for (i in 0 until 250) {
             state = Json.parseToJsonElement(client.get("/zkpassport/v1/jobs/$id") { header("Authorization", "Bearer $token") }.bodyAsText()).jsonObject
             if (state["state"]?.jsonPrimitive?.content == "failed") break
-            delay(20)
+            pause()
         }
         assertEquals("proof:x:acir_input", state["code"]!!.jsonPrimitive.content)
     }

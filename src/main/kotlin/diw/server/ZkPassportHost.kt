@@ -90,22 +90,28 @@ class ZkPassportHost(
                 running.withLock {
                     if (!isActive) return@withLock
                     val proved = proving.prove(entry.chip, entry.job) { p -> entry.state = progress(p) }
-                    entry.state = buildJsonObject {
+                    finish(entry, buildJsonObject {
                         put("state", "done")
                         put("result", result(proved))
-                    }
+                    })
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ZkPassportProver.Failure) {
-                entry.state = failed(e.code)
+                finish(entry, failed(e.code))
             } catch (e: Exception) {
-                entry.state = failed("other")
+                finish(entry, failed("other"))
             } finally {
-                entry.finished = clock()
+                synchronized(jobs) { if (entry.finished == null) entry.finished = clock() }
             }
         }
         return Submitted.Ok(id)
+    }
+
+    /** Sets the outcome and marks the job finished together, so a read never sees one without the other. */
+    private fun finish(entry: Entry, state: JsonObject) = synchronized(jobs) {
+        entry.state = state
+        entry.finished = clock()
     }
 
     /** The job's state; a finished job is dropped once its outcome is read. Null for an unknown id. */
