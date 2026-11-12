@@ -87,7 +87,8 @@ internal fun runProver(args: List<String>) {
     val pairing = server.zkPassportPairing!!
     // The classic Windows console shows ANSI colours as text; Windows Terminal (WT_SESSION) draws them.
     val image = if (System.getProperty("os.name").orEmpty().startsWith("Windows") && System.getenv("WT_SESSION") == null) {
-        File.createTempFile("diw-prover-", ".svg").apply { deleteOnExit() }
+        // In the user's own data directory, not the shared temporary one: the code is a secret until it is used.
+        File(config.dataDir, "pairing-code.svg").apply { deleteOnExit() }
     } else null
     fun show() {
         val link = pairing.newLink()

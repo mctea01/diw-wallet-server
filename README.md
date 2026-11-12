@@ -170,7 +170,7 @@ java -jar diw-server-<版本>-all.jar prover   # jar 版
 - 電腦與手機要在同一個內網（或同一個 Tailscale 網路）。程式自動選內網位址，選錯時加 `--address <IP>`；埠預設 8090，可用 `--port` 改。
 - 第一次執行時 Windows 防火牆與 macOS 會詢問是否允許連入，請只允許私人網路。
 - macOS 從瀏覽器下載的原生版未經 Apple 公證，第一次執行前需 `xattr -d com.apple.quarantine diw-server`，或改用 jar 版。
-- Windows Terminal（Windows 11 預設）會直接畫出 QR Code；傳統主控台改把 QR Code 存成暫存的 SVG 檔並印出路徑，用瀏覽器開啟後掃描，程式結束時刪除。
+- Windows Terminal（Windows 11 預設）會直接畫出 QR Code；傳統主控台改把 QR Code 存成資料目錄中的 `pairing-code.svg` 並印出路徑，用瀏覽器開啟後掃描，程式結束時刪除。
 - 啟動後會下載約 130 MB 的 CRS 到 `DIW_DATA_DIR`（預設 `~/.diw-server`），之後沿用；證明時的記憶體高峰視護照簽章演算法而定，RSA 約 1 GB，P-521 等可到 2 GB。
 
 ### 原生執行檔（實驗）

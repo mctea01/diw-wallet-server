@@ -182,7 +182,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
   - jar：`diw-server-<版本>-all.jar`（`./gradlew uberJar`），四個平台的程式庫都在裡面，執行時依系統解開到資料目錄；需要 Java 21 以上，任何系統 `java -jar diw-server-<版本>-all.jar prover`。依賴的服務檔（`META-INF/services`）合併後才放入，Ktor 引擎與 log 才不會遺失。
   - 原生執行檔：`diw-server-<版本>-<平台>.tar.gz`（Windows 為 `.zip`），GraalVM 25 在各系統各自建置，只含該平台的程式庫；跨平台的資源樣式在 `META-INF/native-image/diw.server/diw-server-platforms`。
   - 每個系統都先以 jar、再以原生執行檔啟動證明器，`/healthz` 回 200（UltraHonk 已載入）才算通過；失敗時印出的 log 會濾掉配對連結與 QR Code。打 `v*` 標籤時附加到 `ci` 建立的 Release。
-  - 傳統 Windows 主控台不顯示 ANSI 色彩，沒有 `WT_SESSION`（Windows Terminal）時改把 QR Code 寫成暫存 SVG 並印出路徑，結束時刪除。
+  - 傳統 Windows 主控台不顯示 ANSI 色彩，沒有 `WT_SESSION`（Windows Terminal）時改把 QR Code 寫成資料目錄中的 `pairing-code.svg` 並印出路徑（不放共用的暫存目錄），結束時刪除。
 
 ## 4. 金鑰與信任
 
