@@ -13,6 +13,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -56,6 +60,37 @@ class ZkPassportHostTest {
 
     /** A real pause: testApplication may skip delay() in virtual time while the job runs on real threads. */
     private suspend fun pause() = withContext(Dispatchers.Default) { delay(20) }
+
+    /** Finished jobs nobody reads are bounded, so quickly failing submissions cannot pile up in memory. */
+    @Test
+    fun unreadOutcomesAreBounded() = runBlocking<Unit> {
+        var proved = 0
+        val host = ZkPassportHost(
+            proving = { _, _, _ ->
+                proved++
+                throw ZkPassportProver.Failure("unsupported")
+            },
+            queue = 1, rpc = { null }, available = { true },
+        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val body = Json.parseToJsonElement(request()).jsonObject
+            val ids = (1..ZkPassportHost.MAX_UNREAD).map {
+                val submitted = host.submit(body, scope)
+                assertTrue(submitted is ZkPassportHost.Submitted.Ok)
+                // Wait until this job has failed, so only finished, unread jobs remain.
+                while (proved < it) pause()
+                pause()
+                submitted.id
+            }
+            assertEquals(ZkPassportHost.Submitted.Busy, host.submit(body, scope))
+            // Reading one outcome makes room again.
+            assertEquals("failed", host.status(ids.first())!!["state"]!!.jsonPrimitive.content)
+            assertTrue(host.submit(body, scope) is ZkPassportHost.Submitted.Ok)
+        } finally {
+            scope.cancel()
+        }
+    }
 
     @Test
     fun theFeatureNeedsATokenHash() {

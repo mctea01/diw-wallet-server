@@ -20,8 +20,8 @@ import diw.wallet.core.zk.native.bindings.nativeInfo
 import diw.wallet.core.zk.native.bindings.ZkCancelToken
 import diw.wallet.core.zk.ZkPdfAssets
 import diw.wallet.core.zkpassport.ZkPassportProver
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import diw.wallet.core.zk.native.bindings.oprfPublicKey
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
@@ -167,10 +167,24 @@ class Server(
                 nativeReady = { ultraHonk },
             )
             ZkPassportProving { chip, job, progress ->
-                val token = ZkCancelToken()
-                // Cancelling the job stops the native prover between circuits.
-                currentCoroutineContext()[Job]?.invokeOnCompletion { if (it != null) token.cancel() }
-                token.use { prover.prove(chip, job, it, progress) }
+                ZkCancelToken().use { token ->
+                    coroutineScope {
+                        // Cancelling the job signals the native prover at once (it stops between circuits); the
+                        // watcher ends inside this scope, so it never touches a closed token.
+                        val watcher = launch {
+                            try {
+                                awaitCancellation()
+                            } finally {
+                                token.cancel()
+                            }
+                        }
+                        try {
+                            prover.prove(chip, job, token, progress)
+                        } finally {
+                            watcher.cancel()
+                        }
+                    }
+                }
             }
         },
         queue = config.zkPassportQueue,

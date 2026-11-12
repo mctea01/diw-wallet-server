@@ -58,7 +58,7 @@ class ZkPassportHost(
     private val keep: Duration = 10.minutes,
     private val clock: () -> Instant = { Clock.System.now() },
 ) {
-    private class Entry(val chip: ZkPassportProver.Chip, val job: ZkPassportProver.Job, val created: Instant) {
+    private class Entry(@Volatile var chip: ZkPassportProver.Chip?, val job: ZkPassportProver.Job, val created: Instant) {
         @Volatile var state: JsonObject = buildJsonObject { put("state", "queued") }
         @Volatile var finished: Instant? = null
         @Volatile var worker: Job? = null
@@ -76,13 +76,16 @@ class ZkPassportHost(
         data object Busy : Submitted
     }
 
-    /** Starts proving [request] in [scope]; [Submitted.Busy] when [queue] jobs already wait. */
+    /**
+     * Starts proving [request] in [scope]; [Submitted.Busy] when [queue] jobs already wait or [MAX_UNREAD] finished
+     * outcomes are still unread, so a client that never reads them cannot fill the memory.
+     */
     fun submit(request: JsonObject, scope: CoroutineScope): Submitted {
         val (chip, job) = parse(request) ?: return Submitted.Invalid
         val id = synchronized(jobs) {
             prune()
             val waiting = jobs.values.count { it.finished == null }
-            if (waiting > queue) return Submitted.Busy
+            if (waiting > queue || jobs.size - waiting >= MAX_UNREAD) return Submitted.Busy
             val id = ByteArray(16).also(random::nextBytes).joinToString("") { "%02x".format(it) }
             jobs[id] = Entry(chip, job, clock())
             id
@@ -91,8 +94,9 @@ class ZkPassportHost(
         entry.worker = scope.launch {
             try {
                 running.withLock {
-                    if (!isActive) return@withLock
-                    val proved = proving.prove(entry.chip, entry.job) { p -> entry.state = progress(p) }
+                    val chip = entry.chip
+                    if (!isActive || chip == null) return@withLock
+                    val proved = proving.prove(chip, entry.job) { p -> entry.state = progress(p) }
                     finish(entry, buildJsonObject {
                         put("state", "done")
                         put("result", result(proved))
@@ -105,14 +109,21 @@ class ZkPassportHost(
             } catch (e: Exception) {
                 finish(entry, failed("other"))
             } finally {
-                synchronized(jobs) { if (entry.finished == null) entry.finished = clock() }
+                synchronized(jobs) {
+                    entry.chip = null
+                    if (entry.finished == null) entry.finished = clock()
+                }
             }
         }
         return Submitted.Ok(id)
     }
 
-    /** Sets the outcome and marks the job finished together, so a read never sees one without the other. */
+    /**
+     * Sets the outcome and marks the job finished together, so a read never sees one without the other; the chip
+     * files are released at once.
+     */
     private fun finish(entry: Entry, state: JsonObject) = synchronized(jobs) {
+        entry.chip = null
         entry.state = state
         entry.finished = clock()
     }
@@ -195,6 +206,8 @@ class ZkPassportHost(
     companion object {
         /** Room for two base64 chip files, sealed once more by a paired wallet. */
         const val MAX_BODY = 512 shl 10
+        /** Finished jobs whose outcome is still unread; each keeps its proofs until read or dropped after keep. */
+        const val MAX_UNREAD = 4
         private const val MAX_FILE = 64 shl 10
         private val DOMAIN = Regex("^[A-Za-z0-9.:-]{1,253}$")
         private val VERSION = Regex("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$")

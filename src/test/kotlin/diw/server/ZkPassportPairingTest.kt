@@ -145,18 +145,24 @@ class ZkPassportPairingTest {
         val tls = ProverTls.create("https://127.0.0.1:1")
         val listener = tls.serve(0, 1)
         try {
-            val trustAll = object : javax.net.ssl.X509TrustManager {
-                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+            // Trusts exactly the certificate whose SHA-256 the pairing code carries, as the wallet does.
+            fun pinned(pin: ByteArray) = object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) =
+                    throw java.security.cert.CertificateException("no client certificates")
+                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {
+                    val leaf = chain.firstOrNull()?.encoded ?: throw java.security.cert.CertificateException("no certificate")
+                    if (!java.security.MessageDigest.getInstance("SHA-256").digest(leaf).contentEquals(pin)) {
+                        throw java.security.cert.CertificateException("certificate does not match the pin")
+                    }
+                }
                 override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = emptyArray()
             }
-            val context = javax.net.ssl.SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustAll), null) }
-            val socket = context.socketFactory.createSocket("127.0.0.1", listener.localPort) as javax.net.ssl.SSLSocket
-            socket.use {
-                it.startHandshake()
-                val leaf = it.session.peerCertificates.first().encoded
-                assertTrue(java.security.MessageDigest.getInstance("SHA-256").digest(leaf).contentEquals(tls.certificateSha256))
+            fun handshake(pin: ByteArray) {
+                val context = javax.net.ssl.SSLContext.getInstance("TLS").apply { init(null, arrayOf(pinned(pin)), null) }
+                (context.socketFactory.createSocket("127.0.0.1", listener.localPort) as javax.net.ssl.SSLSocket).use { it.startHandshake() }
             }
+            handshake(tls.certificateSha256)
+            assertFailsWith<javax.net.ssl.SSLException> { handshake(ByteArray(32)) }
         } finally {
             listener.close()
         }
