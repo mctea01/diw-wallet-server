@@ -319,11 +319,13 @@ data class ServerConfig(
                 require(oprfKey != null && OprfHost.validKey(oprfKey)) { "The oprf feature needs oprf_key (diw-server oprf-keygen prints one)" }
                 require(oprfTokens.isNotEmpty()) { "The oprf feature needs oprf_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)" }
             }
-            val zkPassportTokens = hashes("zkpassport_token_sha256").ifEmpty { tokenHashes }
+            // No fallback to zktls_token_sha256: that token may be shared with other wallets, and passport data must
+            // reach only the owner's prover.
+            val zkPassportTokens = hashes("zkpassport_token_sha256")
             if (FEATURE_ZKPASSPORT in features) {
-                // Passport data must never reach a prover anyone can call.
-                require(zkPassportTokens.isNotEmpty()) {
-                    "The zkpassport feature needs zkpassport_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)"
+                require(zkPassportTokens.isNotEmpty()) { "The zkpassport feature needs zkpassport_token_sha256 (diw-server hash-token prints it)" }
+                require(zkPassportTokens.none { t -> tokenHashes.any { it.contentEquals(t) } }) {
+                    "zkpassport_token_sha256 must differ from zktls_token_sha256, which may be shared with other wallets"
                 }
             }
             val federation = FederationSettings(

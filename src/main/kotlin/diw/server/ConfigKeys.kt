@@ -96,7 +96,7 @@ object ConfigKeys {
             ConfigKey("oprf_total", "2000", "Evaluations in all per hour."),
         ),
         "Own zkPassport prover (features=zkpassport)" to listOf(
-            ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the tokens that may send passport data for proving; defaults to zktls_token_sha256. One of them is required."),
+            ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport and never one of zktls_token_sha256."),
             ConfigKey("zkpassport_queue", "2", "Jobs that may wait behind the one being proved."),
             ConfigKey("zkpassport_rpc", null, "Ethereum mainnet node for zkPassport's registries; defaults to the wallet's public node."),
             ConfigKey("zkpassport_sepolia_rpc", null, "Ethereum Sepolia node for test requests; defaults to the wallet's public node."),

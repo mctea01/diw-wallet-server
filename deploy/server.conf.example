@@ -129,7 +129,7 @@ DIW_PUBLIC_URL=https://diw.example.org
 # DIW_OPRF_TOTAL=2000
 
 # --- Own zkPassport prover (features=zkpassport) ---
-# SHA-256 of the tokens that may send passport data for proving; defaults to zktls_token_sha256. One of them is required.
+# SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport and never one of zktls_token_sha256.
 # DIW_ZKPASSPORT_TOKEN_SHA256=
 # Jobs that may wait behind the one being proved. Default: 2.
 # DIW_ZKPASSPORT_QUEUE=2

@@ -56,8 +56,14 @@ class ZkPassportHostTest {
     fun theFeatureNeedsATokenHash() {
         val base = mapOf("public_url" to "https://diw.example.org", "features" to "zkpassport")
         assertFailsWith<IllegalArgumentException> { ServerConfig.from(base) }
-        val shared = ServerConfig.from(base + mapOf("features" to "zktls,zkpassport", "zktls_token_sha256" to tokenHash))
-        assertTrue(shared.zkPassportTokenHashes.single().contentEquals(shared.zkTlsTokenHashes.single()))
+        // The zkTLS token may be shared with other wallets, so it neither stands in for nor equals the prover's token.
+        assertFailsWith<IllegalArgumentException> { ServerConfig.from(base + mapOf("features" to "zktls,zkpassport", "zktls_token_sha256" to tokenHash)) }
+        assertFailsWith<IllegalArgumentException> {
+            ServerConfig.from(base + mapOf("features" to "zktls,zkpassport", "zktls_token_sha256" to tokenHash, "zkpassport_token_sha256" to tokenHash))
+        }
+        val other = SigningIdentity.sha256Hex("zktls-shared-token-0123456789".encodeToByteArray())
+        val both = ServerConfig.from(base + mapOf("features" to "zktls,zkpassport", "zktls_token_sha256" to other, "zkpassport_token_sha256" to tokenHash))
+        assertTrue(both.zkPassportTokenHashes.single().contentEquals(both.zkTlsTokenHashes.single()).not())
         assertFailsWith<IllegalArgumentException> { config(mapOf("zkpassport_rpc" to "ftp://rpc.example.org")) }
     }
 
