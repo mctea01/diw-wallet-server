@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
@@ -102,6 +104,46 @@ tasks.named<CreateStartScripts>("startScripts") {
 
 tasks.jar {
     manifest { attributes("Implementation-Version" to project.version) }
+}
+
+// Service files of every dependency merged into one per service, so the single jar keeps Ktor's engines and the
+// logger providers that a plain copy would drop.
+val mergedServices by tasks.registering {
+    val output = layout.buildDirectory.dir("uber-services")
+    val jars = configurations.runtimeClasspath.map { c -> c.filter { it.name.endsWith(".jar") } }
+    inputs.files(jars)
+    outputs.dir(output)
+    doLast {
+        val dir = output.get().asFile.apply { deleteRecursively() }
+        val merged = sortedMapOf<String, LinkedHashSet<String>>()
+        jars.get().forEach { jar ->
+            ZipFile(jar).use { zip ->
+                zip.entries().asSequence().filter { !it.isDirectory && it.name.startsWith("META-INF/services/") }.forEach { entry ->
+                    zip.getInputStream(entry).bufferedReader().readLines().map { it.substringBefore('#').trim() }
+                        .filter { it.isNotEmpty() }.forEach { merged.getOrPut(entry.name) { linkedSetOf() }.add(it) }
+                }
+            }
+        }
+        merged.forEach { (name, lines) -> File(dir, name).apply { parentFile.mkdirs() }.writeText(lines.joinToString("\n", postfix = "\n")) }
+    }
+}
+
+// One jar for every desktop system (java -jar diw-server-<version>-all.jar prover), Java 21 or later. It carries
+// the native proof libraries the build finds under wallet/native/dist/resources; the prover workflow puts every
+// platform there first.
+val uberJar by tasks.registering(Jar::class) {
+    description = "Builds a single runnable jar with every dependency."
+    archiveBaseName.set("diw-server")
+    archiveClassifier.set("all")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes("Main-Class" to "diw.server.MainKt", "Implementation-Version" to project.version, "Multi-Release" to "true")
+    }
+    // The merged service files come first, so they win over each jar's own copy.
+    from(mergedServices)
+    from(sourceSets.main.map { it.output })
+    from(configurations.runtimeClasspath.map { c -> c.filter { it.name.endsWith(".jar") }.map { zipTree(it) } })
+    exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA", "META-INF/*.EC", "META-INF/INDEX.LIST", "module-info.class")
 }
 
 tasks.test {

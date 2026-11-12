@@ -1,0 +1,12 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "zk/native/[^/]+/(lib)?diw_(zk|bb5)\\.(so|dll|dylib)(\\.sha256)?"
+      },
+      {
+        "pattern": "com/sun/jna/[^/]+/(lib)?jnidispatch\\.(so|dll|jnilib|dylib)"
+      }
+    ]
+  }
+}

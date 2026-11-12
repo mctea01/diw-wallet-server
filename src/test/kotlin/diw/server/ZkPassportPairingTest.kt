@@ -168,4 +168,11 @@ class ZkPassportPairingTest {
         assertTrue(qr.lines().size > 20)
         assertTrue(qr.all { it.code < 128 })
     }
+
+    @Test
+    fun theSvgCodeHasEveryDarkModule() {
+        val svg = svgQr("diw-prover://v1?u=https%3A%2F%2F192.168.1.20%3A8090&p=AAAA&c=AAAA")
+        assertTrue(svg.startsWith("<svg") && svg.trimEnd().endsWith("</svg>"))
+        assertTrue(Regex("M\\d+ \\d+h1v1h-1z").findAll(svg).count() > 100)
+    }
 }

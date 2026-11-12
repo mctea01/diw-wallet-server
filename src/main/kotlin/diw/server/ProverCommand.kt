@@ -85,10 +85,19 @@ internal fun runProver(args: List<String>) {
         fail("cannot listen on port $port: ${e.message}")
     }
     val pairing = server.zkPassportPairing!!
+    // The classic Windows console shows ANSI colours as text; Windows Terminal (WT_SESSION) draws them.
+    val image = if (System.getProperty("os.name").orEmpty().startsWith("Windows") && System.getenv("WT_SESSION") == null) {
+        File.createTempFile("diw-prover-", ".svg").apply { deleteOnExit() }
+    } else null
     fun show() {
         val link = pairing.newLink()
         println()
-        print(terminalQr(link))
+        if (image != null) {
+            image.writeText(svgQr(link), Charsets.UTF_8)
+            println("Open ${image.path} to see the code; it is deleted when the prover stops.")
+        } else {
+            print(terminalQr(link))
+        }
         println(link)
         println("zkPassport prover at $publicUrl. Scan this one-time code with the wallet; it expires in 10 minutes.")
         println("Enter: a new code (for another phone or after it expired). Ctrl+C: stop; every session and job ends with it.")
@@ -197,12 +206,14 @@ private fun lanAddress(): String? {
     }
 }
 
+private fun qrMatrix(text: String) = QRCodeWriter().encode(
+    text, BarcodeFormat.QR_CODE, 0, 0,
+    mapOf(EncodeHintType.MARGIN to 2, EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L),
+)
+
 /** [text] as a QR code drawn with ANSI background colours, two spaces per module, quiet zone included. */
 internal fun terminalQr(text: String): String {
-    val matrix = QRCodeWriter().encode(
-        text, BarcodeFormat.QR_CODE, 0, 0,
-        mapOf(EncodeHintType.MARGIN to 2, EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L),
-    )
+    val matrix = qrMatrix(text)
     val dark = "\u001B[40m  "
     val light = "\u001B[47m  "
     return buildString {
@@ -210,5 +221,16 @@ internal fun terminalQr(text: String): String {
             for (x in 0 until matrix.width) append(if (matrix.get(x, y)) dark else light)
             append("\u001B[0m\n")
         }
+    }
+}
+
+/** [text] as an SVG QR code, for consoles without ANSI colours. */
+internal fun svgQr(text: String): String {
+    val matrix = qrMatrix(text)
+    return buildString {
+        append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ${matrix.width} ${matrix.height}\" width=\"${matrix.width * 8}\" ")
+        append("height=\"${matrix.height * 8}\" shape-rendering=\"crispEdges\"><rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path fill=\"#000\" d=\"")
+        for (y in 0 until matrix.height) for (x in 0 until matrix.width) if (matrix.get(x, y)) append("M${x} ${y}h1v1h-1z")
+        append("\"/></svg>\n")
     }
 }

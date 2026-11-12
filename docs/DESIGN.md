@@ -178,7 +178,11 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 之後每個請求：`Authorization: DIW-Session <session>.<seal>`，`seal` 是以 K 做 AES-256-GCM 封裝的 `{n, m, p}`（遞增計數、方法、路徑，AAD `"diw-prover auth v1 <session>"`）；計數必須大於上一個，方法與路徑必須相符，所以截到的請求無法重送或改用到別的路徑。請求與回應本文為 `{sealed}`，AAD 分別為 `"<session> <n> request"` 與 `"<session> <n> response"`。TLS 之外再封裝一層，配對與工作都不依賴 TLS 才安全。
 - 工作階段只在記憶體，閒置 30 分鐘或程序結束即消失；`DELETE /zkpassport/v1/pair` 由錢包主動結束。工作與 3.9 共用同一個佇列與結果規則（讀一次即刪）。
 - 錢包端：掃描配對碼後把證明器當成臨時的證明位置，只保留工作階段，不存配對碼；同意畫面標示資料會送到哪個位址。工作階段失效時請使用者重新掃描。
-- 發佈：Windows、macOS、Linux 各有 jar 版（附 Java 執行環境）與原生執行檔，原生證明程式庫需含 `zkpdf`（UltraHonk）。
+- 發佈（`.github/workflows/prover.yml`）：原生證明程式庫只開 `zkpdf,bb5`（UltraHonk 與舊版電路用的 Barretenberg 5），Linux x86_64、Linux ARM64、Windows x86_64（在 Linux 以 llvm-mingw 交叉建置）與 macOS Apple silicon 各建一份。
+  - jar：`diw-server-<版本>-all.jar`（`./gradlew uberJar`），四個平台的程式庫都在裡面，執行時依系統解開到資料目錄；需要 Java 21 以上，任何系統 `java -jar diw-server-<版本>-all.jar prover`。依賴的服務檔（`META-INF/services`）合併後才放入，Ktor 引擎與 log 才不會遺失。
+  - 原生執行檔：`diw-server-<版本>-<平台>.tar.gz`（Windows 為 `.zip`），GraalVM 25 在各系統各自建置，只含該平台的程式庫；跨平台的資源樣式在 `META-INF/native-image/diw.server/diw-server-platforms`。
+  - 每個系統都先以 jar、再以原生執行檔啟動證明器，`/healthz` 回 200（UltraHonk 已載入）才算通過；失敗時印出的 log 會濾掉配對連結與 QR Code。打 `v*` 標籤時附加到 `ci` 建立的 Release。
+  - 傳統 Windows 主控台不顯示 ANSI 色彩，沒有 `WT_SESSION`（Windows Terminal）時改把 QR Code 寫成暫存 SVG 並印出路徑，結束時刪除。
 
 ## 4. 金鑰與信任
 

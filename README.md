@@ -151,6 +151,28 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
 - 閒置 `SLEEP_AFTER`（預設 20 分鐘）後休眠，下一個連線需冷啟動（容器 1 至 3 秒，加上 JVM 約 1 秒；原生映像約 0.2 秒）。
 - 版型包每次冷啟動都重新下載；台灣出口流量每 GB 0.05 美元（含 500 GB），個人用量通常用不完。
 
+### 臨時證明器下載與執行
+
+Release 附有 `diw-server prover` 可直接執行的版本，原生證明程式庫已含 zkPassport 需要的 UltraHonk：
+
+| 檔案 | 系統 | 需求 |
+| --- | --- | --- |
+| `diw-server-<版本>-all.jar` | 任何系統（Windows x86_64、macOS Apple silicon、Linux x86_64 與 ARM64） | Java 21 以上 |
+| `diw-server-<版本>-windows-x86_64.zip` | Windows 10 以上 | 無 |
+| `diw-server-<版本>-macos-aarch64.tar.gz` | macOS 14 以上（Apple silicon） | 無 |
+| `diw-server-<版本>-linux-x86_64.tar.gz`、`-linux-aarch64.tar.gz` | Linux | 無 |
+
+```sh
+java -jar diw-server-<版本>-all.jar prover   # jar 版
+./diw-server prover                          # 原生版（Windows 為 diw-server.exe prover）
+```
+
+- 電腦與手機要在同一個內網（或同一個 Tailscale 網路）。程式自動選內網位址，選錯時加 `--address <IP>`；埠預設 8090，可用 `--port` 改。
+- 第一次執行時 Windows 防火牆與 macOS 會詢問是否允許連入，請只允許私人網路。
+- macOS 從瀏覽器下載的原生版未經 Apple 公證，第一次執行前需 `xattr -d com.apple.quarantine diw-server`，或改用 jar 版。
+- Windows Terminal（Windows 11 預設）會直接畫出 QR Code；傳統主控台改把 QR Code 存成暫存的 SVG 檔並印出路徑，用瀏覽器開啟後掃描，程式結束時刪除。
+- 啟動後會下載約 130 MB 的 CRS 到 `DIW_DATA_DIR`（預設 `~/.diw-server`），之後沿用；證明時的記憶體高峰視護照簽章演算法而定，RSA 約 1 GB，P-521 等可到 2 GB。
+
 ### 原生執行檔（實驗）
 
 CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-server-<版本>-native`（x86_64 Linux）與映像 `ghcr.io/mctea01/diw-wallet-server:<版本>-native`。功能、設定、資料目錄與指令都和 JVM 版相同，只換掉執行方式：
