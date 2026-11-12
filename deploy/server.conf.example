@@ -9,7 +9,7 @@
 # --- General ---
 # Address wallets use, e.g. https://diw.example.org; session links, relay and web verifier URLs are built from it.
 DIW_PUBLIC_URL=https://diw.example.org
-# Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf. Default: relay.
+# Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport. Default: relay.
 # DIW_FEATURES=relay
 # Contact address for the certificate authority; read by the bundled Caddy configuration, not by the server.
 # DIW_ACME_EMAIL=admin@example.org
@@ -127,3 +127,13 @@ DIW_PUBLIC_URL=https://diw.example.org
 # DIW_OPRF_PER_ADDRESS=20
 # Evaluations in all per hour. Default: 2000.
 # DIW_OPRF_TOTAL=2000
+
+# --- Own zkPassport prover (features=zkpassport) ---
+# SHA-256 of the tokens that may send passport data for proving; defaults to zktls_token_sha256. One of them is required.
+# DIW_ZKPASSPORT_TOKEN_SHA256=
+# Jobs that may wait behind the one being proved. Default: 2.
+# DIW_ZKPASSPORT_QUEUE=2
+# Ethereum mainnet node for zkPassport's registries; defaults to the wallet's public node.
+# DIW_ZKPASSPORT_RPC=
+# Ethereum Sepolia node for test requests; defaults to the wallet's public node.
+# DIW_ZKPASSPORT_SEPOLIA_RPC=

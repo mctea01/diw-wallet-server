@@ -18,6 +18,7 @@
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
 | 行動自然人憑證簽署 | v1（可選） | `/twfido/sign`，以服務端的 SP 帳號向內政部要求簽署，SP 金鑰不放進 App | 可 |
 | 本專案 OPRF | v1（可選） | `/oprf/v1/key`、`/oprf/v1/evaluate`，zkPassport 加鹽唯一識別碼的單一金鑰 OPRF，金鑰不放進 App | 可（每次評估為一次純量乘法與證明） |
+| 自己的 zkPassport 證明器 | v1（可選） | `/zkpassport/v1/jobs`，替使用者自己的錢包產生 zkPassport 回應證明；主機會看到 SOD 與 DG1（不含照片） | 不保證，記憶體高峰視 DSC 簽章演算法而定 |
 | 信任聯盟 | v1（可選） | `/.well-known/openid-federation`，OpenID Federation 1.0 的 Entity Configuration；可當上級（`/federation/fetch`、`/federation/list`） | 可 |
 
 ## 2. 技術選擇
@@ -144,6 +145,23 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 授權（第一版）：存取權杖（只存 SHA-256，`oprf_token_sha256` 未設定時沿用 `zktls_token_sha256`）加每個位址每小時 `oprf_per_address`（預設 20）、全部 `oprf_total`（預設 2000）次。第二版加入本專案 FaceMatch 證明（需要 Play Integrity 金鑰），之前的識別碼在錢包與查驗端標示「未經人臉比對」。
 - 金鑰：`oprf_key`（BabyJubJub 純量，`diw-server oprf-keygen` 產生，secret），`oprf_key_id`（預設 `1`）隨公鑰公開。換鑰時產生新金鑰並改 `oprf_key_id`；舊識別碼全部失效，錢包與查驗端以新公鑰雜湊為準。
 - 原生程式庫要含 `oprf`；`DIW_ZK_FEATURES` 未含時 `/oprf/*` 與 `/healthz` 回 503。
+
+### 3.9 自己的 zkPassport 證明器（`zkpassport`）
+
+2026-11-12 使用者決定：zkPassport 的回應證明可以交給使用者自己的服務端產生，手機只負責讀晶片、連 bridge 與送出。護照資料會離開手機，所以只用於使用者自己設定（有存取權杖）的服務端，不是公開服務。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| POST | `/zkpassport/v1/jobs` | 需 `Authorization: Bearer <權杖>`；JSON `{sod, dg1, query, domain, scope, dev_mode, circuit_version}`（`sod`、`dg1` 為 base64；證明日期取服務端時鐘，請求不能指定），回 202 `{id}` |
+| GET | `/zkpassport/v1/jobs/{id}` | 需權杖；`{state: queued\|registry\|proving, index, total, name}`，完成時 `{state: done, result: {proofs, messages, query_result}}`，失敗時 `{state: failed, code}` |
+| DELETE | `/zkpassport/v1/jobs/{id}` | 需權杖；取消並刪除 |
+
+- 證明沿用錢包 core 的 `ZkPassportProver`（官方 Rust 輸入產生與 driver，電路逐一核對 vkey 雜湊後才執行），與手機上完全相同；不需要 DG2，DG2 雜湊取自 SOD。
+- 晶片資料與結果只存在記憶體中的工作物件，不寫入磁碟或 log；工作識別碼為 128 位元亂數。完成或失敗的結果被讀取一次後刪除，未讀取的工作 10 分鐘後刪除。
+- 一次只跑一個工作，等待中的工作最多 `zkpassport_queue`（預設 2），超過回 429。權杖只存 SHA-256，`zkpassport_token_sha256` 未設定時沿用 `zktls_token_sha256`；兩者都沒有時不提供這個功能（啟動失敗），因為不能讓任何人把護照資料送進來。
+- 以太坊節點由服務端設定（`zkpassport_rpc`、`zkpassport_sepolia_rpc`，未設定用錢包內建的公開節點），不接受請求指定網址。不使用 OPRF（回應時不加鹽，與手機相同）。
+- 需要原生程式庫的 UltraHonk（`DIW_ZK_FEATURES` 含 `zkpdf`）與 CRS；啟動時下載 CRS 到資料目錄。缺少時 `/zkpassport/*` 與 `/healthz` 回 503。
+- 資源：證明期間的記憶體高峰取決於 DSC 的簽章演算法（RSA-4096 的電路最大），1 GB 主機可能不夠；`/info` 的 `zkpassport` 只表示功能可用，不保證記憶體足夠。
 
 ## 4. 金鑰與信任
 

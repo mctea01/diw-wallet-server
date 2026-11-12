@@ -26,7 +26,7 @@ object ConfigKeys {
     val groups: List<Pair<String, List<ConfigKey>>> = listOf(
         "General" to listOf(
             ConfigKey("public_url", null, "Address wallets use, e.g. https://diw.example.org; session links, relay and web verifier URLs are built from it.", required = true, example = "https://diw.example.org"),
-            ConfigKey("features", "relay", "Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf."),
+            ConfigKey("features", "relay", "Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport."),
             ConfigKey("acme_email", null, "Contact address for the certificate authority; read by the bundled Caddy configuration, not by the server.", example = "admin@example.org"),
         ),
         "Deployment (platform defaults apply when unset)" to listOf(
@@ -94,6 +94,12 @@ object ConfigKeys {
             ConfigKey("oprf_token_sha256", null, "SHA-256 of the evaluation access tokens; defaults to zktls_token_sha256."),
             ConfigKey("oprf_per_address", "20", "Evaluations from one client address per hour."),
             ConfigKey("oprf_total", "2000", "Evaluations in all per hour."),
+        ),
+        "Own zkPassport prover (features=zkpassport)" to listOf(
+            ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the tokens that may send passport data for proving; defaults to zktls_token_sha256. One of them is required."),
+            ConfigKey("zkpassport_queue", "2", "Jobs that may wait behind the one being proved."),
+            ConfigKey("zkpassport_rpc", null, "Ethereum mainnet node for zkPassport's registries; defaults to the wallet's public node."),
+            ConfigKey("zkpassport_sepolia_rpc", null, "Ethereum Sepolia node for test requests; defaults to the wallet's public node."),
         ),
     )
 
