@@ -1,6 +1,6 @@
 # DIW 正式服務端設計（diw-wallet-server）
 
-狀態：S1 至 S3 已實作（中繼、zkTLS 查驗主機與回執、存取權杖、金鑰管理、附執行環境的發行檔、容器、systemd、Cloud Run、Cloudflare Containers），Bonds 年齡查驗主機、網頁查驗端與行動自然人憑證簽署（TWFIDO SP）已實作（可選功能）；S3 的實機部署驗收待使用者執行。2026-11-05 加入：所有部署共用一份設定檔與設定摘要（5.5）、OpenID Federation（4.1）、GraalVM 原生執行檔（實驗，5.6）。S4（zkPDF 證明器）為設計。
+性質：設計規格。這份文件寫介面、約定與理由，不記錄進度；各功能做到哪裡、哪些待驗收見 [STATUS.md](STATUS.md)。表中的 zkPDF 證明器（S4）只有設計，沒有實作。
 
 ## 1. 目的與範圍
 
@@ -24,10 +24,10 @@
 
 ## 2. 技術選擇
 
-- Kotlin 2.2.21、Ktor 3.3.3（CIO 引擎）、JVM 21，與錢包一致。2026-11-05 由 Netty 改為 CIO：Ktor 在 GraalVM native image 只支援 CIO，兩種執行方式因此共用同一份程式。
+- Kotlin、Ktor（CIO 引擎）、JVM 21，版本與錢包一致，記在 `gradle/libs.versions.toml`。2026-11-05 由 Netty 改為 CIO：Ktor 在 GraalVM native image 只支援 CIO，兩種執行方式因此共用同一份程式。
 - 不用 Rust 重寫：zkTLS 查驗、描述檔檢查與回執簽發都在錢包的 `core`（`ZkTlsVerification`、`ZkTlsCheck`、`WebProofCredentials`）。重寫一份會讓兩邊的協定逐漸分歧。
 - `core` 的引用方式：錢包 repo 以 git submodule 釘選在指定 commit，用 Gradle composite build 建置。升級時改 submodule 指標，CI 驗證通過才發佈。
-- 原生程式庫：在 CI 以錢包的 `native/build.sh` 建出 linux-x86_64 的 `tlsn` 版本（錢包的 `ZkNative` 目前只載入 linux-x86_64，arm64 主機要等錢包支援）。VPS 不編譯 Rust。
+- 原生程式庫：在 CI 以錢包的 `native/build.sh` 建置。映像與發行檔是 linux-x86_64，功能為 `openac,tlsn,oprf,zkpdf,bb5`；臨時證明器的下載另建各系統的版本（`zkpdf,bb5`）。VPS 不編譯 Rust。
 - 建置需要 Android SDK：錢包的 `core` 是含 Android 目標的 Kotlin Multiplatform 函式庫，composite build 會一併設定。只在 CI 與開發機需要，執行環境不需要。
 - 容器映像只放建好的發行檔（`./gradlew installDist`），不在映像內編譯。
 
@@ -281,7 +281,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 | S4 | zkPDF 證明器（等 M3c） | 在大記憶體主機產生證明，手機驗證後使用 |
 | TWFIDO SP | 行動自然人憑證的 SP 金鑰只放在服務端（錢包可選用服務端、編譯時設定的 SP 或手動設定） | 手機透過服務端推播簽署並自行驗證簽章與 MOICA 憑證鏈（需內政部 SP 帳號，由持有帳號者執行） |
 
-S1 至 S3 與 TWFIDO SP 的程式與自動測試已完成（zkTLS 查驗主機以原生 TLSNotary 端對端測試通過；TWFIDO SP 以本機模擬的內政部服務測試，含 `idp_checksum` 偽造與頻率限制）。S2 的 cgroup 實測、S3 的乾淨 VPS、Cloud Run 與 Cloudflare 實機部署由使用者執行。
+各里程碑的完成情形與待驗收項目見 [STATUS.md](STATUS.md)。
 
 ## 9. 之後的方向
 
