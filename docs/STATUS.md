@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-13（main 到 PR #30）。
+最後更新：2026-11-13（main 到 PR #34）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -12,7 +12,7 @@
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
-- 錢包以 git submodule 釘選在 `wallet/`。目前釘的 commit 不在錢包的 main 上（是合併前的分支 commit），修正在 PR #33，尚未合併。
+- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #127 合併後，由 PR #33 更新）。
 
 ## 2. 功能狀態
 
@@ -50,8 +50,7 @@
 未完成：
 
 - S4 zkPDF 證明器。
-- submodule 指向錢包 main（PR #33）。
-- 待合併的相依更新：Ktor 3.6.1（PR #27）、GraalVM 建置外掛（PR #29）、兩個 GitHub Action 的 digest（PR #31、#32）。
+- 待合併的相依更新：GraalVM 建置外掛（PR #29）、兩個 GitHub Action 的 digest（PR #31、#32）。
 - 第一個 `v*` 標籤與 Release。
 
 待實機驗收（由部署的人執行，沒有紀錄）：
@@ -73,7 +72,7 @@
 
 | 項目 | 版本 |
 |---|---|
-| Kotlin、Ktor（CIO）、coroutines、serialization | 2.4.21、3.6.0、1.11.0、1.12.0 |
+| Kotlin、Ktor（CIO）、coroutines、serialization | 2.4.21、3.6.1、1.11.0、1.12.0 |
 | JDK | 21（jlink 執行環境）；原生執行檔用 GraalVM Community 25 |
 | 錢包 `core` 與原生程式庫 | submodule `wallet/` 釘選的 commit |
 | CI 建置的原生功能 | 映像：`openac,tlsn,oprf,zkpdf,bb5`；臨時證明器：`zkpdf,bb5` |
