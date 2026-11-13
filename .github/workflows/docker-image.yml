@@ -39,9 +39,29 @@ jobs:
       # Rust is on the runner image; wallet/native/rust-toolchain.toml installs the pinned version on first use.
       - name: Native build tools (protoc and libclang for OpenAC, Ninja and CMake for Barretenberg)
         run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev ninja-build cmake
+      # Only the crate registry and git checkouts. The target directory is not cached: rust-cache prunes loose files
+      # from it, which strips the Git metadata of target/bb-source, and the next run then stops in build_bb.py with
+      # "bb_revision". Barretenberg has its own caches below, as in the wallet's workflow.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wallet/native -> target
+          cache-targets: false
+          cache-bin: false
+      # Barretenberg is a pinned C++ build of many minutes; reuse it while build_bb.py is unchanged.
+      - name: Cache Barretenberg
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            wallet/native/target/bb-source
+            wallet/native/target/bb-x86_64-unknown-linux-gnu
+          key: bb-6.0.0-x86_64-linux-${{ hashFiles('wallet/native/zkpdf-prover/tools/build_bb.py', 'wallet/native/zkpdf-prover/tools/portable_x86_64.cmake') }}
+      - name: Cache Barretenberg 5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            wallet/native/target/bb-v5
+            wallet/native/target/bb5-x86_64-unknown-linux-gnu
+          key: bb-5.0.0-x86_64-linux-${{ hashFiles('wallet/native/zkpdf-prover/tools/build_bb.py', 'wallet/native/zkpdf-prover/tools/portable_x86_64.cmake') }}
       - name: Test and build the distributions
         run: ./gradlew --no-daemon --stacktrace test installDist distTar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -110,9 +130,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Native build tools (protoc and libclang for OpenAC, Ninja and CMake for Barretenberg)
         run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev ninja-build cmake
+      # Only the crate registry and git checkouts. The target directory is not cached: rust-cache prunes loose files
+      # from it, which strips the Git metadata of target/bb-source, and the next run then stops in build_bb.py with
+      # "bb_revision". Barretenberg has its own caches below, as in the wallet's workflow.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wallet/native -> target
+          cache-targets: false
+          cache-bin: false
+      # Barretenberg is a pinned C++ build of many minutes; reuse it while build_bb.py is unchanged.
+      - name: Cache Barretenberg
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            wallet/native/target/bb-source
+            wallet/native/target/bb-x86_64-unknown-linux-gnu
+          key: bb-6.0.0-x86_64-linux-${{ hashFiles('wallet/native/zkpdf-prover/tools/build_bb.py', 'wallet/native/zkpdf-prover/tools/portable_x86_64.cmake') }}
+      - name: Cache Barretenberg 5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            wallet/native/target/bb-v5
+            wallet/native/target/bb5-x86_64-unknown-linux-gnu
+          key: bb-5.0.0-x86_64-linux-${{ hashFiles('wallet/native/zkpdf-prover/tools/build_bb.py', 'wallet/native/zkpdf-prover/tools/portable_x86_64.cmake') }}
       - name: Native executable
         run: ./gradlew --no-daemon --stacktrace nativeCompile
       - name: End-to-end test against the native executable
