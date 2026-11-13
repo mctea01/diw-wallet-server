@@ -17,6 +17,9 @@
 | 網頁查驗端 | v1（可選） | `/verify` 網頁與 `/api/oidvp/*`，以官方查驗端的方言向政府數位憑證皮夾請求卡片，也可查驗 Bonds 自然人憑證自發卡 | 可 |
 | Bonds 年齡查驗主機 | v1（可選） | `/api/zkp/*`，與 Bonds 查驗網站相同；預設只轉送，由查驗方手機驗證，可設定在主機驗證 | 轉送可；主機驗證不可（需載入 432 MB 驗證金鑰） |
 | 行動自然人憑證簽署 | v1（可選） | `/twfido/sign`，以服務端的 SP 帳號向內政部要求簽署，SP 金鑰不放進 App | 可 |
+| 本專案 OPRF | v1（可選） | `/oprf/v1/key`、`/oprf/v1/evaluate`，zkPassport 加鹽唯一識別碼的單一金鑰 OPRF，金鑰不放進 App | 可（每次評估為一次純量乘法與證明） |
+| 自己的 zkPassport 證明器 | v1（可選） | `/zkpassport/v1/jobs`，替使用者自己的錢包產生 zkPassport 回應證明；主機會看到 SOD 與 DG1（不含照片） | 不保證，記憶體高峰視 DSC 簽章演算法而定 |
+| 臨時證明器 | v1（可選） | `diw-server prover`，內網限定、一次性 QR 配對、釘選憑證的 TLS 加上封裝，不需設定檔與權杖 | 同上 |
 | 信任聯盟 | v1（可選） | `/.well-known/openid-federation`，OpenID Federation 1.0 的 Entity Configuration；可當上級（`/federation/fetch`、`/federation/list`） | 可 |
 
 ## 2. 技術選擇
@@ -128,6 +131,58 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 - 限制：建立需存取權杖（只存 SHA-256），避免被用來對任意身分證號推播；同時請求 16、每個位址 4、每個身分證號 2（以雜湊計，不保存號碼）。
 - 隱私：服務端看得到身分證號、提示與待簽位元組；三者與結果只在記憶體，到期後 2 分鐘刪除，不寫入 log，回應也不回傳身分證號。
 - 環境：`twfido_environment` 為 `production`（預設）或 `uat`；兩者都需內政部核發的 SP 帳號。`/info` 的 `twfido.environment` 列出目前的環境。
+
+### 3.8 本專案 OPRF（`oprf`）
+
+2026-11-05 使用者決定（錢包 `docs/design/zkpassport.md` 5.5）：zkPassport 的加鹽唯一識別碼改用本專案的 OPRF，金鑰放在服務端 secret，不放進 APK（任何人都能從 APK 取出金鑰，等於沒有加鹽）。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| GET | `/oprf/v1/key` | `{key_id, pk: {x, y, hash}}`；`hash` 是 zkPassport 電路輸出的 `oprf_pk_hash`，查驗端以它判斷接受的金鑰 |
+| POST | `/oprf/v1/evaluate` | 需 `Authorization: Bearer <權杖>`；JSON `{key_id, blinded_query: {x, y}}`，回 `{key_id, pk, response_blinded, dlog_e, dlog_s}` |
+
+- 計算沿用錢包原生程式庫的 `oprf_evaluate`（TACEO `taceo-oprf-core`）：回應為金鑰乘以盲化點，附 Chaum-Pedersen 證明；錢包以 `/oprf/v1/key` 的公鑰核對證明，再解盲成電路的 `nullifier_secret`。zkPassport 的揭露電路已實測接受此證明。
+- 服務端只看到盲化點（隨機純量乘上雜湊到曲線的私密 nullifier），看不到 nullifier、護照資料或結果；請求不寫入 log、不保存。
+- 授權（第一版）：存取權杖（只存 SHA-256，`oprf_token_sha256` 未設定時沿用 `zktls_token_sha256`）加每個位址每小時 `oprf_per_address`（預設 20）、全部 `oprf_total`（預設 2000）次。第二版加入本專案 FaceMatch 證明（需要 Play Integrity 金鑰），之前的識別碼在錢包與查驗端標示「未經人臉比對」。
+- 金鑰：`oprf_key`（BabyJubJub 純量，`diw-server oprf-keygen` 產生，secret），`oprf_key_id`（預設 `1`）隨公鑰公開。換鑰時產生新金鑰並改 `oprf_key_id`；舊識別碼全部失效，錢包與查驗端以新公鑰雜湊為準。
+- 原生程式庫要含 `oprf`；`DIW_ZK_FEATURES` 未含時 `/oprf/*` 與 `/healthz` 回 503。
+
+### 3.9 自己的 zkPassport 證明器（`zkpassport`）
+
+2026-11-12 使用者決定：zkPassport 的回應證明可以交給使用者自己的服務端產生，手機只負責讀晶片、連 bridge 與送出。護照資料會離開手機，所以只用於使用者自己設定（有存取權杖）的服務端，不是公開服務。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| POST | `/zkpassport/v1/jobs` | 需 `Authorization: Bearer <權杖>`；JSON `{sod, dg1, query, domain, scope, dev_mode, circuit_version}`（`sod`、`dg1` 為 base64；證明日期取服務端時鐘，請求不能指定），回 202 `{id}` |
+| GET | `/zkpassport/v1/jobs/{id}` | 需權杖；`{state: queued\|registry\|proving, index, total, name}`，完成時 `{state: done, result: {proofs, messages, query_result}}`，失敗時 `{state: failed, code}` |
+| DELETE | `/zkpassport/v1/jobs/{id}` | 需權杖；取消並刪除 |
+
+- 證明沿用錢包 core 的 `ZkPassportProver`（官方 Rust 輸入產生與 driver，電路逐一核對 vkey 雜湊後才執行），與手機上完全相同；不需要 DG2，DG2 雜湊取自 SOD。
+- 晶片資料與結果只存在記憶體中的工作物件，不寫入磁碟或 log；工作識別碼為 128 位元亂數。完成或失敗的結果被讀取一次後刪除，未讀取的工作 10 分鐘後刪除。
+- 一次只跑一個工作，等待中的工作最多 `zkpassport_queue`（預設 2），已完成但未讀取的結果最多 4 個，超過都回 429；工作結束時立即釋放晶片資料，取消會立即通知原生證明器。權杖只存 SHA-256，必須設定專用的 `zkpassport_token_sha256`，且不可與 `zktls_token_sha256` 相同（啟動失敗）：zkTLS 權杖可能隨分享連結給了其他錢包，護照資料只能送進擁有者自己的證明器。
+- 以太坊節點由服務端設定（`zkpassport_rpc`、`zkpassport_sepolia_rpc`，未設定用錢包內建的公開節點），不接受請求指定網址。不使用 OPRF（回應時不加鹽，與手機相同）。
+- 需要原生程式庫的 UltraHonk（`DIW_ZK_FEATURES` 含 `zkpdf`）與 CRS；啟動時下載 CRS 到資料目錄。缺少時 `/zkpassport/*` 與 `/healthz` 回 503。
+- 資源：證明期間的記憶體高峰取決於 DSC 的簽章演算法（RSA-4096 的電路最大），1 GB 主機可能不夠；`/info` 的 `zkpassport` 只表示功能可用，不保證記憶體足夠。
+- 部署建議：與給其他錢包共用的正式服務端分開，另跑一個只開 `zkpassport` 的實例（同一映像，各自一份 `server.conf`），放在記憶體較大或只在需要時啟動的主機（家用電腦、Cloud Run）。理由：正式服務端的權杖與網址會分享給他人，護照資料不應送到多人使用的主機；證明的記憶體高峰可能讓同一主機的中繼、zkTLS 與 OPRF 被系統終止；OPRF 金鑰等秘密也不必與證明器放在同一台。錢包端把證明器設成獨立的服務端項目，不沿用正式服務端的設定。
+
+### 3.10 臨時證明器與一次性配對（`diw-server prover`）
+
+2026-11-12 使用者提出：多數人不會設定服務端，只是在家用電腦臨時開一個證明器、在內網直接使用，也不一定會設定權杖。所以有 `diw-server prover`，以 QR Code 承載一次性的配對碼，不需要設定檔與權杖。
+
+- 啟動：`diw-server prover [--port 8090] [--address <內網 IP>]`。不讀 `server.conf`，只開 `zkpassport`；位址自動選內網 IPv4（優先 192.168.x、10.x，略過 docker 等虛擬網卡）。`DIW_DATA_DIR`（預設 `~/.diw-server`）保存 CRS，`DIW_ZKPASSPORT_RPC`、`DIW_ZKPASSPORT_SEPOLIA_RPC`、`DIW_ZKPASSPORT_QUEUE` 照常適用。終端機印出 QR Code 與連結（不寫入 log），按 Enter 產生新的，Ctrl+C 結束時所有工作階段與工作一併消失。配對只能透過這個指令；一般部署仍用權杖（3.9）。
+- TLS：Android 正式版的網路安全設定不允許對內網位址使用明文 HTTP，所以證明器以 TLS 對外。每次啟動產生新的 P-256 金鑰與自簽憑證（只在記憶體），配對碼帶憑證的 SHA-256，錢包只接受這張憑證（釘選，不看主機名稱與 CA）。TLS 前端聽所有介面，只接受私有位址的連線再轉給只聽 loopback 的服務，同時最多 16 條連線。
+- 私有位址：loopback、RFC 1918、連結本地、IPv6 ULA（fc00::/7）與 100.64.0.0/10（Tailscale 等），以連線本身的位址判斷。路由器即使把埠轉發出去，網際網路上的連線也一律關閉。
+- 配對碼：`diw-prover://v1?u=<https 網址>&p=<32 bytes base64url>&c=<憑證 SHA-256 base64url>`，10 分鐘內有效，用過一次即失效，新的配對碼會取代未用的舊碼。配對秘密不會在網路上傳送：
+  1. 錢包 `POST /zkpassport/v1/pair` `{nonce, mac}`，`nonce` 為 16 bytes，`mac = HMAC-SHA256(p, "diw-prover pair v1" || nonce)`。
+  2. 服務端核對後回 `{session, nonce: 服務端 nonce}`，配對碼作廢；雙方各自算出 `K = HMAC-SHA256(p, "diw-prover session v1" || 錢包 nonce || 服務端 nonce)`。配對碼錯誤回 401，已用過或過期回 410。
+- 之後每個請求：`Authorization: DIW-Session <session>.<seal>`，`seal` 是以 K 做 AES-256-GCM 封裝的 `{n, m, p}`（遞增計數、方法、路徑，AAD `"diw-prover auth v1 <session>"`）；計數必須大於上一個，方法與路徑必須相符，所以截到的請求無法重送或改用到別的路徑。請求與回應本文為 `{sealed}`，AAD 分別為 `"<session> <n> request"` 與 `"<session> <n> response"`。TLS 之外再封裝一層，配對與工作都不依賴 TLS 才安全。
+- 工作階段只在記憶體，閒置 30 分鐘或程序結束即消失；`DELETE /zkpassport/v1/pair` 由錢包主動結束。工作與 3.9 共用同一個佇列與結果規則（讀一次即刪）。
+- 錢包端：掃描配對碼後把證明器當成臨時的證明位置，只保留工作階段，不存配對碼；同意畫面標示資料會送到哪個位址。工作階段失效時請使用者重新掃描。
+- 發佈（`.github/workflows/prover.yml`）：原生證明程式庫只開 `zkpdf,bb5`（UltraHonk 與舊版電路用的 Barretenberg 5），Linux x86_64、Linux ARM64、Windows x86_64（在 Linux 以 llvm-mingw 交叉建置）與 macOS Apple silicon 各建一份。
+  - jar：`diw-server-<版本>-all.jar`（`./gradlew uberJar`），四個平台的程式庫都在裡面，執行時依系統解開到資料目錄；需要 Java 21 以上，任何系統 `java -jar diw-server-<版本>-all.jar prover`。依賴的服務檔（`META-INF/services`）合併後才放入，Ktor 引擎與 log 才不會遺失。
+  - 原生執行檔：`diw-server-<版本>-<平台>.tar.gz`（Windows 為 `.zip`），GraalVM 25 在各系統各自建置，只含該平台的程式庫；跨平台的資源樣式在 `META-INF/native-image/diw.server/diw-server-platforms`。
+  - 每個系統都先以 jar、再以原生執行檔啟動證明器，`/healthz` 回 200（UltraHonk 已載入）才算通過；失敗時印出的 log 會濾掉配對連結與 QR Code。打 `v*` 標籤時附加到 `ci` 建立的 Release。
+  - 傳統 Windows 主控台不顯示 ANSI 色彩，沒有 `WT_SESSION`（Windows Terminal）時改把 QR Code 寫成資料目錄中的 `pairing-code.svg` 並印出路徑（不放共用的暫存目錄），結束時刪除。
 
 ## 4. 金鑰與信任
 

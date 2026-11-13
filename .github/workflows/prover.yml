@@ -1,0 +1,284 @@
+# The temporary zkPassport prover (diw-server prover, DESIGN 3.10) for desktop systems: one jar for any system
+# with Java 21 or later, and a GraalVM native executable for each system. Every build carries the native proof
+# library with UltraHonk (zkpdf) and Barretenberg 5 (bb5) for old zkPassport circuits; the jar carries all four
+# platforms. On every system the jar and the executable start the prover and must answer /healthz, which needs the
+# library loaded. A v* tag attaches them to the release the ci workflow creates.
+name: prover
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - src/main/kotlin/diw/server/ProverCommand.kt
+      - src/main/kotlin/diw/server/ZkPassport*.kt
+      - src/main/resources/META-INF/native-image/**
+      - build.gradle.kts
+      - .github/workflows/prover.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LANG: C.UTF-8
+  JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
+  DIW_ZK_FEATURES: zkpdf,bb5
+
+jobs:
+  library:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+            target: host
+            triple: x86_64-unknown-linux-gnu
+          - platform: linux-aarch64
+            os: ubuntu-24.04-arm
+            target: host
+            triple: aarch64-unknown-linux-gnu
+          # Cross-built on Linux with llvm-mingw, as in the wallet: Barretenberg cannot be built on a Windows host.
+          - platform: windows-x86_64
+            os: ubuntu-latest
+            target: x86_64-pc-windows-gnullvm
+            triple: x86_64-pc-windows-gnullvm
+          - platform: macos-aarch64
+            os: macos-latest
+            target: host
+            triple: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/swift \
+            /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google /opt/az \
+            /usr/local/julia* /opt/hostedtoolcache/go /opt/hostedtoolcache/PyPy /opt/hostedtoolcache/Ruby \
+            /usr/local/lib/android
+          df -h /
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: true
+      - name: Build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build cmake libclang-dev
+      - name: Build tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja
+          command -v cmake > /dev/null || brew install cmake
+      # wallet/native/rust-toolchain.toml installs the pinned version on first use; rustup itself may be missing.
+      - name: Rust
+        run: |
+          if ! command -v rustup > /dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: wallet/native
+          shared-key: prover-${{ matrix.platform }}
+          cache-targets: false
+          cache-bin: false
+          save-if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+      - name: Cache Barretenberg
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            wallet/native/target/bb-source
+            wallet/native/target/bb-${{ matrix.triple }}
+            wallet/native/target/bb-v5
+            wallet/native/target/bb5-${{ matrix.triple }}
+          key: bb-6.0.0-5.0.0-${{ matrix.triple }}-${{ hashFiles('wallet/native/zkpdf-prover/tools/*.py', 'wallet/native/zkpdf-prover/tools/*.cmake') }}
+      - name: Build the ${{ matrix.platform }} library
+        run: |
+          bash wallet/native/build.sh ${{ matrix.target }}
+          ls -lR wallet/native/dist/resources
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: zk-${{ matrix.platform }}
+          # The directory, so the artifact keeps the zk/native/<platform>/ layout of the JVM resources.
+          path: wallet/native/dist/resources/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Drop intermediate build files
+        if: always()
+        run: |
+          if [ -d wallet/native/target ]; then find wallet/native/target -mindepth 1 -maxdepth 1 ! -name 'bb-*' ! -name 'bb5-*' -exec rm -rf {} +; fi
+
+  jar:
+    needs: library
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DIW_ZK_NATIVE: prebuilt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: true
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: zk-*
+          path: wallet/native/dist/resources
+          merge-multiple: true
+      - name: Every platform's library
+        run: |
+          for p in linux-x86_64/libdiw_zk.so linux-aarch64/libdiw_zk.so windows-x86_64/diw_zk.dll macos-aarch64/libdiw_zk.dylib; do
+            test -s "wallet/native/dist/resources/zk/native/$p" && test -s "wallet/native/dist/resources/zk/native/$p.sha256"
+          done
+          ls -lR wallet/native/dist/resources
+      - name: Build the jar
+        run: |
+          ./gradlew --no-daemon --stacktrace uberJar
+          version=$(cat version.txt)
+          [ "${GITHUB_REF_TYPE}" != tag ] || version=${GITHUB_REF_NAME#v}
+          mkdir -p dist
+          cp build/libs/diw-server-*-all.jar "dist/diw-server-$version-all.jar"
+          ls -l dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: prover-jar
+          path: dist/*.jar
+          if-no-files-found: error
+          retention-days: 14
+
+  native:
+    needs: [library, jar]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+            exe: ""
+          - platform: linux-aarch64
+            os: ubuntu-24.04-arm
+            exe: ""
+          - platform: windows-x86_64
+            os: windows-latest
+            exe: .exe
+          - platform: macos-aarch64
+            os: macos-latest
+            exe: ""
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      DIW_ZK_NATIVE: prebuilt
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: true
+      # Tests and the wallet build run on Java 21; native-image comes from GraalVM 25 (21 fails on Kotlin coroutines).
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
+        with:
+          java-version: "25"
+          distribution: graalvm-community
+          set-java-home: false
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      # The wallet's core module has an Android target, so Gradle needs an SDK with its platform even for the JVM
+      # build; the Arm Linux image has none.
+      - name: Android SDK
+        if: matrix.platform == 'linux-aarch64'
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ] || [ ! -d "$ANDROID_HOME/platforms" ]; then
+            sdk=$RUNNER_TEMP/android-sdk
+            mkdir -p "$sdk/cmdline-tools"
+            curl -fsSL -o "$RUNNER_TEMP/tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q "$RUNNER_TEMP/tools.zip" -d "$sdk/cmdline-tools"
+            mv "$sdk/cmdline-tools/cmdline-tools" "$sdk/cmdline-tools/latest"
+            yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$sdk" --licenses > /dev/null || true
+            "$sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$sdk" "platforms;android-36" > /dev/null
+            echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: zk-${{ matrix.platform }}
+          path: wallet/native/dist/resources
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prover-jar
+          path: dist
+      # Relative paths only: on Windows, RUNNER_TEMP is a Windows path that Git Bash redirections may not take.
+      - name: Smoke test helper
+        run: |
+          cat > smoke.sh <<'EOF'
+          # Starts the prover with the given command on port $1 and waits until /healthz answers 200 (UltraHonk loaded).
+          port=$1; shift
+          log=prover-$port.log
+          DIW_DATA_DIR="prover-data-$port" "$@" prover --address 127.0.0.1 --port "$port" < /dev/null > "$log" 2>&1 &
+          pid=$!
+          ok=
+          for i in $(seq 1 120); do
+            code=$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$port/healthz" || true)
+            if [ "$code" = 200 ]; then ok=1; break; fi
+            sleep 1
+          done
+          curl -sk "https://127.0.0.1:$port/info" || true
+          echo
+          kill "$pid" 2> /dev/null || true
+          # The log holds the one-time link and its QR code; leave both out even though the run ends here.
+          if [ -z "$ok" ]; then grep -v -e 'diw-prover://' -e $'\033' "$log" | tail -40; exit 1; fi
+          EOF
+      - name: The jar on ${{ matrix.platform }}
+        run: bash smoke.sh 18091 java -jar dist/diw-server-*-all.jar
+      - name: Native executable
+        run: ./gradlew --no-daemon --stacktrace nativeCompile
+      - name: The executable on ${{ matrix.platform }}
+        run: bash smoke.sh 18090 "build/native/nativeCompile/diw-server${{ matrix.exe }}"
+      - name: Package
+        run: |
+          version=$(cat version.txt)
+          [ "${GITHUB_REF_TYPE}" != tag ] || version=${GITHUB_REF_NAME#v}
+          name=diw-server-$version-${{ matrix.platform }}
+          mkdir -p "pkg/$name" out
+          cp "build/native/nativeCompile/diw-server${{ matrix.exe }}" README.md LICENSE "pkg/$name/"
+          if [ "${{ runner.os }}" = Windows ]; then
+            (cd pkg && 7z a -bd "../out/$name.zip" "$name" > /dev/null)
+          else
+            chmod +x "pkg/$name/diw-server"
+            tar -C pkg -czf "out/$name.tar.gz" "$name"
+          fi
+          ls -l out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: prover-${{ matrix.platform }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [jar, native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: prover-*
+          path: out
+          merge-multiple: true
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -l out
+          # The ci workflow creates the release; wait for it, then add the files.
+          for i in $(seq 1 60); do gh release view "${GITHUB_REF_NAME}" -R "${GITHUB_REPOSITORY}" > /dev/null 2>&1 && break; sleep 10; done
+          gh release upload "${GITHUB_REF_NAME}" out/* -R "${GITHUB_REPOSITORY}" --clobber

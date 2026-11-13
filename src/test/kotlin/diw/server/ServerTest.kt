@@ -12,6 +12,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -87,10 +88,12 @@ class ServerTest {
     fun oneAddressHasBoundedConnections() = testApplication {
         start(Server(config(RelayLimits(perAddress = 2))))
         val ws = wsClient()
-        val open = List(2) { ws.webSocketSession("/zktls/relay/${room()}") }
-        val third = ws.webSocketSession("/zktls/relay/${room()}")
-        assertEquals(CloseReason.Codes.TRY_AGAIN_LATER.code, third.closeReason.await()?.code)
-        open.forEach { it.close() }
+        // The handshake completes before the server's handler counts the connection, so any one of the three may be
+        // the one refused; waiting on the last alone hangs when an earlier one lost the race.
+        val sessions = List(3) { ws.webSocketSession("/zktls/relay/${room()}") }
+        val refused = withTimeout(10_000) { select { sessions.forEach { s -> s.closeReason.onAwait { s } } } }
+        assertEquals(CloseReason.Codes.TRY_AGAIN_LATER.code, refused.closeReason.await()?.code)
+        sessions.filter { it !== refused }.forEach { it.close() }
     }
 
     @Test

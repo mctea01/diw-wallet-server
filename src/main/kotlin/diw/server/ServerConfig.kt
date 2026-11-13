@@ -83,6 +83,21 @@ data class ServerConfig(
     /** SHA-256 of the tokens that may ask for a signature; required with the twfido feature. */
     val twFidoTokenHashes: List<ByteArray> = emptyList(),
     val twFido: TwFidoLimits = TwFidoLimits(),
+    /** The project OPRF key (a BabyJubJub scalar, from a platform secret); required with the oprf feature. */
+    val oprfKey: String? = null,
+    /** The key's id, published with its public half; change it when the key is rotated. */
+    val oprfKeyId: String = "1",
+    /** SHA-256 of the tokens that may ask for an evaluation; defaults to the zkTLS tokens. */
+    val oprfTokenHashes: List<ByteArray> = emptyList(),
+    val oprf: OprfLimits = OprfLimits(),
+    /** SHA-256 of the tokens that may send passport data for proving; defaults to the zkTLS tokens. */
+    val zkPassportTokenHashes: List<ByteArray> = emptyList(),
+    /** Jobs that may wait behind the one being proved. */
+    val zkPassportQueue: Int = 2,
+    val zkPassportPairing: Boolean = false,
+    /** Ethereum nodes for zkPassport's registries (mainnet, Sepolia); null uses the wallet core's public ones. */
+    val zkPassportRpc: String? = null,
+    val zkPassportSepoliaRpc: String? = null,
     /** Read by the bundled Caddy configuration only; kept so the one settings file serves both. */
     val acmeEmail: String? = null,
     val federation: FederationSettings = FederationSettings(),
@@ -152,6 +167,15 @@ data class ServerConfig(
             "federation_key_pem" to secret(federation.keyPem),
             "federation_subordinates_file" to federation.subordinatesFile?.path,
             "federation_lifetime_hours" to federation.lifetimeHours.toString(),
+            "oprf_key" to secret(oprfKey),
+            "oprf_key_id" to oprfKeyId,
+            "oprf_token_sha256" to hex(oprfTokenHashes),
+            "oprf_per_address" to oprf.perAddress.toString(),
+            "oprf_total" to oprf.total.toString(),
+            "zkpassport_token_sha256" to hex(zkPassportTokenHashes),
+            "zkpassport_queue" to zkPassportQueue.toString(),
+            "zkpassport_rpc" to zkPassportRpc,
+            "zkpassport_sepolia_rpc" to zkPassportSepoliaRpc,
         )
         check(m.keys == ConfigKeys.names) { "effective() and ConfigKeys disagree: ${(m.keys - ConfigKeys.names) + (ConfigKeys.names - m.keys)}" }
         return m
@@ -174,12 +198,18 @@ data class ServerConfig(
         const val FEATURE_ZKTLS = "zktls"
         const val FEATURE_TWFIDO = "twfido"
         const val FEATURE_FEDERATION = "federation"
-        val FEATURES = setOf(FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER, FEATURE_ZKTLS, FEATURE_TWFIDO, FEATURE_FEDERATION)
+        const val FEATURE_OPRF = "oprf"
+        const val FEATURE_ZKPASSPORT = "zkpassport"
+        val FEATURES = setOf(
+            FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER, FEATURE_ZKTLS, FEATURE_TWFIDO, FEATURE_FEDERATION, FEATURE_OPRF,
+            FEATURE_ZKPASSPORT,
+        )
         const val DEFAULT_FILE = "/etc/diw-server/server.conf"
         const val DEFAULT_VERIFIER_NAME = "DIW 網頁查驗"
         const val SECRET_SET = "<set>"
         val KEYS: Set<String> get() = ConfigKeys.names
         private val HEX64 = Regex("^[0-9a-fA-F]{64}$")
+        private val KEY_ID = Regex("^[0-9A-Za-z._-]{1,32}$")
 
         /**
          * Reads one settings file: `DIW_<KEY>=value` or `key=value` lines, `#` comments, an optional `export ` and
@@ -228,7 +258,8 @@ data class ServerConfig(
             return from(values).copy(sources = sources, platform = platform)
         }
 
-        fun from(values: Map<String, String>): ServerConfig {
+        /** [pairing] is set by `diw-server prover` only (DESIGN 3.10): wallets pair by QR code instead of a token. */
+        fun from(values: Map<String, String>, pairing: Boolean = false): ServerConfig {
             values.keys.firstOrNull { it !in ConfigKeys.names }?.let { throw IllegalArgumentException("Unknown setting: $it") }
             fun str(key: String): String? = values[key]?.trim()?.takeIf { it.isNotEmpty() }
             fun int(key: String, default: Int, range: IntRange): Int {
@@ -281,6 +312,28 @@ data class ServerConfig(
                 require(key != null && key.size == 32) { "twfido_aes_key must be the SP's 32-byte AES key in base64" }
                 require(twFidoTokens.isNotEmpty()) { "The twfido feature needs twfido_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)" }
             }
+            val oprfKey = str("oprf_key")
+            val oprfTokens = hashes("oprf_token_sha256").ifEmpty { tokenHashes }
+            val oprfKeyId = str("oprf_key_id") ?: "1"
+            require(KEY_ID.matches(oprfKeyId)) { "oprf_key_id must be 1 to 32 letters, digits, dots, dashes or underscores" }
+            if (FEATURE_OPRF in features) {
+                // Checked here so a wrong key stops the start; the key itself is never printed.
+                require(oprfKey != null && OprfHost.validKey(oprfKey)) { "The oprf feature needs oprf_key (diw-server oprf-keygen prints one)" }
+                require(oprfTokens.isNotEmpty()) { "The oprf feature needs oprf_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)" }
+            }
+            // No fallback to zktls_token_sha256: that token may be shared with other wallets, and passport data must
+            // reach only the owner's prover.
+            val zkPassportTokens = hashes("zkpassport_token_sha256")
+            val trustForwarded = bool("trust_forwarded", listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost")
+            if (FEATURE_ZKPASSPORT in features) {
+                // Pairing lets wallets in with a one-time QR code instead (DESIGN 3.10).
+                require(zkPassportTokens.isNotEmpty() || pairing) {
+                    "The zkpassport feature needs zkpassport_token_sha256 (diw-server hash-token prints it)"
+                }
+                require(zkPassportTokens.none { t -> tokenHashes.any { it.contentEquals(t) } }) {
+                    "zkpassport_token_sha256 must differ from zktls_token_sha256, which may be shared with other wallets"
+                }
+            }
             val federation = FederationSettings(
                 entityId = str("federation_entity_id")?.let { httpsUrl("federation_entity_id", it) },
                 authorityHints = list("federation_authority_hints").map { httpsUrl("federation_authority_hints", it) },
@@ -299,7 +352,7 @@ data class ServerConfig(
             return ServerConfig(
                 publicUrl = publicUrl,
                 listenHost = listenHost,
-                trustForwarded = bool("trust_forwarded", listenHost == "127.0.0.1" || listenHost == "::1" || listenHost == "localhost"),
+                trustForwarded = trustForwarded,
                 listenPort = int("listen_port", 8080, 1..65535),
                 features = features,
                 dataDir = File(str("data_dir") ?: "/var/lib/diw-server"),
@@ -349,6 +402,18 @@ data class ServerConfig(
                 ),
                 acmeEmail = str("acme_email"),
                 federation = federation,
+                oprfKey = oprfKey,
+                oprfKeyId = oprfKeyId,
+                oprfTokenHashes = oprfTokens,
+                oprf = OprfLimits(
+                    perAddress = int("oprf_per_address", 20, 1..10_000),
+                    total = int("oprf_total", 2000, 1..1_000_000),
+                ),
+                zkPassportTokenHashes = zkPassportTokens,
+                zkPassportQueue = int("zkpassport_queue", 2, 0..16),
+                zkPassportPairing = pairing,
+                zkPassportRpc = str("zkpassport_rpc")?.let { httpsUrl("zkpassport_rpc", it) },
+                zkPassportSepoliaRpc = str("zkpassport_sepolia_rpc")?.let { httpsUrl("zkpassport_sepolia_rpc", it) },
             )
         }
     }

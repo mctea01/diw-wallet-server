@@ -16,6 +16,13 @@ import diw.wallet.core.zk.ZkResult
 import diw.wallet.core.zk.native.FileZkAssetStore
 import diw.wallet.core.zk.native.OpenAcAgeNativeVerifier
 import diw.wallet.core.zk.native.ZkNative
+import diw.wallet.core.zk.native.bindings.nativeInfo
+import diw.wallet.core.zk.native.bindings.ZkCancelToken
+import diw.wallet.core.zk.ZkPdfAssets
+import diw.wallet.core.zkpassport.ZkPassportProver
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import diw.wallet.core.zk.native.bindings.oprfPublicKey
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
 import io.ktor.http.ContentType
@@ -68,6 +75,11 @@ class Server(
     zkTlsAvailable: Boolean? = null,
     /** The TW FidO service address; tests point it at a local stand-in. */
     twFidoBaseUrl: String? = null,
+    /** Replaces the zkPassport prover and its availability (tests without the native library). */
+    zkPassportProving: ZkPassportProving? = null,
+    zkPassportAvailable: Boolean? = null,
+    /** SHA-256 of the TLS certificate diw-server prover serves, carried in its pairing codes for the wallet to pin. */
+    zkPassportCertificateSha256: ByteArray? = null,
 ) {
     private val http by lazy { HttpClient(Java) }
     private val didTrust: DidTrust by lazy { didTrust ?: DidTrust(listOf(TwdiwTrustList(http))) }
@@ -128,8 +140,66 @@ class Server(
     val federation: Federation? = if (ServerConfig.FEATURE_FEDERATION !in config.features) null else
         runBlocking { Federation.loadKey(config).let { Federation(config, it, Federation.jwk(it.publicKey), { serverMetadata() }) } }
 
-    /** Whether every enabled feature can run: zktls needs TLSNotary in the native library. */
-    val healthy: Boolean get() = zkTls == null || tlsn
+    /** The project OPRF (zkPassport salted identifiers); the key comes from a platform secret. */
+    val oprf: OprfHost? = if (ServerConfig.FEATURE_OPRF !in config.features) null else
+        OprfHost(config.oprfKey!!, config.oprfKeyId, config.oprf)
+
+    /** The CRS the zkPassport prover shares with zkPDF, installed under the data directory at start. */
+    private val zkAssets by lazy { FileZkAssetStore.bundled(File(config.dataDir, "zk-assets"), http) }
+
+    /** The folder of the installed CRS; null until both files are installed. */
+    private fun crsDirectory(): File? {
+        val paths = ZkPdfAssets.CRS.map { zkAssets.path(it) ?: return null }
+        return File(paths.first()).parentFile
+    }
+
+    private val ultraHonk = zkPassportAvailable ?: (ZkBackend.NOIR_ULTRAHONK in native)
+
+    /** Coroutines of zkPassport jobs; they outlive the request that started them. */
+    val jobs = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** The owner's zkPassport prover (DESIGN 3.9): passport data from the owner's wallet, behind the access token. */
+    val zkPassport: ZkPassportHost? = if (ServerConfig.FEATURE_ZKPASSPORT !in config.features) null else ZkPassportHost(
+        proving = zkPassportProving ?: run {
+            val prover = ZkPassportProver(
+                http, File(config.dataDir, "zkpassport-cache"),
+                crsDirectory = ::crsDirectory,
+                nativeReady = { ultraHonk },
+            )
+            ZkPassportProving { chip, job, progress ->
+                ZkCancelToken().use { token ->
+                    coroutineScope {
+                        // Cancelling the job signals the native prover at once (it stops between circuits); the
+                        // watcher ends inside this scope, so it never touches a closed token.
+                        val watcher = launch {
+                            try {
+                                awaitCancellation()
+                            } finally {
+                                token.cancel()
+                            }
+                        }
+                        try {
+                            prover.prove(chip, job, token, progress)
+                        } finally {
+                            watcher.cancel()
+                        }
+                    }
+                }
+            }
+        },
+        queue = config.zkPassportQueue,
+        rpc = { dev -> if (dev) config.zkPassportSepoliaRpc else config.zkPassportRpc },
+        available = { ultraHonk },
+    )
+
+    /** One-time QR pairing for wallets on a private network (DESIGN 3.10). */
+    val zkPassportPairing: ZkPassportPairing? = if (zkPassport != null && config.zkPassportPairing) ZkPassportPairing(config.publicUrl, zkPassportCertificateSha256) else null
+
+    /**
+     * Whether every enabled feature can run: zktls needs TLSNotary, oprf the OPRF and zkpassport UltraHonk in the
+     * native library.
+     */
+    val healthy: Boolean get() = (zkTls == null || tlsn) && (oprf == null || oprf.publicKey != null) && (zkPassport == null || ultraHonk)
 
     val verifier: TwdiwVerifier? = if (ServerConfig.FEATURE_VERIFIER !in config.features) null else TwdiwVerifier(
         config.publicUrl, config.verifier, config.verifierName,
@@ -164,6 +234,18 @@ class Server(
         zkTls?.start(scope)
         twFido?.start(scope)
         if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
+        if (oprf != null && oprf.publicKey == null) log.warn("The oprf feature is set but the native library has no OPRF")
+        zkPassport?.let { host ->
+            host.start(scope)
+            if (!ultraHonk) log.warn("The zkpassport feature is set but the native library has no UltraHonk prover")
+            else scope.launch(Dispatchers.IO) {
+                for (id in ZkPdfAssets.CRS) {
+                    if (zkAssets.path(id) != null) continue
+                    log.info("Installing {}", id)
+                    if (zkAssets.download(id) { _, _ -> } !is ZkResult.Ok) log.warn("Could not install {}; zkPassport proofs fail until it is", id)
+                }
+            }
+        }
         if (bondsAge == null || !config.bondsAgeVerify || nativeAgeVerifier != null) return
         if (ZkBackend.OPENAC_SPARTAN2 !in native) {
             log.warn("bonds_age_verify is set but the native library has no OpenAC backend; relaying only")
@@ -195,7 +277,7 @@ fun Application.module(server: Server) {
     routing {
         get("/healthz") {
             if (server.healthy) call.respondText("ok", ContentType.Text.Plain, HttpStatusCode.OK)
-            else call.respondText("native library without TLSNotary", ContentType.Text.Plain, HttpStatusCode.ServiceUnavailable)
+            else call.respondText("native library without a backend an enabled feature needs", ContentType.Text.Plain, HttpStatusCode.ServiceUnavailable)
         }
         get("/info") {
             val body = buildJsonObject {
@@ -218,6 +300,15 @@ fun Application.module(server: Server) {
                 server.templates?.version?.let { put("templatesVersion", it) }
                 // Which TW FidO service this server's SP account signs with; the account itself stays private.
                 server.twFido?.let { put("twfido", buildJsonObject { put("environment", it.environment.name) }) }
+                // The OPRF key verifiers accept salted identifiers under (its hash is the circuits' oprf_pk_hash).
+                server.oprf?.publicKey?.let { pk -> put("oprf", buildJsonObject { put("keyId", server.oprf.keyId); put("pk", pk) }) }
+                // Whether this server can prove zkPassport requests for its owner's wallet (DESIGN 3.9).
+                server.zkPassport?.let {
+                    put("zkpassport", buildJsonObject {
+                        put("available", it.isAvailable)
+                        put("pairing", server.zkPassportPairing != null)
+                    })
+                }
                 // Equal on every deployment with the same service settings (ServerConfig.settingsDigest).
                 put("settingsSha256", server.config.settingsDigest())
                 put("platform", server.config.platform.id)
@@ -238,13 +329,15 @@ fun Application.module(server: Server) {
         server.zkTls?.let { zkTlsRoutes(it, server.config.zkTlsTokenHashes) }
         server.twFido?.let { twFidoRoutes(it, server.config.twFidoTokenHashes) }
         server.federation?.let { federationRoutes(it) }
+        server.oprf?.let { oprfRoutes(it, server.config.oprfTokenHashes) }
+        server.zkPassport?.let { zkPassportRoutes(it, server.config.zkPassportTokenHashes, server.zkPassportPairing, server.jobs) }
     }
 }
 
-private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | config | " +
-    "config-template | federation-jwks | federation-enroll <entity_id>]"
+private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | oprf-keygen | config | " +
+    "config-template | federation-jwks | federation-enroll <entity_id> | prover [--port <port>] [--address <ip>]]"
 
-private fun fail(message: String): Nothing {
+internal fun fail(message: String): Nothing {
     System.err.println("diw-server: $message")
     exitProcess(2)
 }
@@ -260,12 +353,15 @@ private fun loadConfig(): ServerConfig = try {
  * - `keygen <file> <public_url> [verifier|federation]` writes a key file for a platform secret (signing_key_pem,
  *   verifier_key_pem, federation_key_pem);
  * - `hash-token` prints the SHA-256 of stdin's first line;
+ * - `oprf-keygen` prints a new OPRF key for oprf_key and, with the native OPRF, its public half;
  * - `config` prints the effective settings, where each came from (secrets hidden) and the settings digest that
  *   /info also reports, to compare deployments;
  * - `config-template` prints the settings file every deployment uses (deploy/server.conf.example);
  * - `federation-jwks` prints this server's federation keys, for the superior that enrols it;
  * - `federation-enroll <entity_id>` fetches and checks a subordinate's Entity Configuration and prints the entry to
- *   add to federation_subordinates_file after comparing the key thumbprints with its operator.
+ *   add to federation_subordinates_file after comparing the key thumbprints with its operator;
+ * - `prover` runs a temporary zkPassport prover for wallets on this network, paired by a one-time QR code
+ *   (DESIGN 3.10, ProverCommand.kt).
  */
 private fun command(args: Array<String>): Boolean {
     when (args.firstOrNull()) {
@@ -299,6 +395,18 @@ private fun command(args: Array<String>): Boolean {
             if (token.length < 16) fail("use a token of at least 16 characters")
             println(SigningIdentity.sha256Hex(token.encodeToByteArray()))
         }
+        "oprf-keygen" -> {
+            // Printed once for the platform secret; the public half is what /oprf/v1/key will show.
+            val key = OprfHost.generateKey()
+            println("DIW_OPRF_KEY=$key")
+            // A fresh owner-only directory, so no other local user can plant the library it loads.
+            val directory = java.nio.file.Files.createTempDirectory("diw-server-native").toFile().apply { deleteOnExit() }
+            if (ZkNative.load(directory) is ZkResult.Ok && "oprf" in nativeInfo().features) {
+                println("# public key: " + oprfPublicKey(key))
+            } else {
+                System.err.println("diw-server: the native library has no OPRF; the public key shows at /oprf/v1/key once the server runs")
+            }
+        }
         "config" -> {
             val config = loadConfig()
             println("# platform ${config.platform.id}")
@@ -309,6 +417,7 @@ private fun command(args: Array<String>): Boolean {
             println("# settings digest ${config.settingsDigest()}")
         }
         "config-template" -> print(ConfigKeys.template())
+        "prover" -> runProver(args.drop(1))
         "federation-jwks" -> {
             val config = loadConfig()
             if (!config.dataDir.isDirectory && !config.dataDir.mkdirs()) fail("cannot create data directory ${config.dataDir}")

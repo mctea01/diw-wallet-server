@@ -10,6 +10,9 @@
 - **網頁查驗端**（`/verify`，可選，`features` 加 `verifier`）：查驗方在網頁輸入卡片類型與欄位，持卡人以政府數位憑證皮夾掃描 QR Code 出示，頁面顯示判定與要求的欄位；也可查驗 Bonds 的自然人憑證自發卡。可設 `verifier_access_token` 限制只有知道存取碼的人能建立查驗。
 - **行動自然人憑證簽署**（`/twfido/sign`，可選，`features` 加 `twfido`）：以這台服務端的 SP 帳號向內政部要求行動自然人憑證簽署，SP 金鑰只放在服務端，不必放進 App。需要內政部核發的 SP 帳號；建立簽署需要存取權杖，避免被用來對任意身分證號推播。服務端看得到身分證號與要簽的位元組（不含文件），只放在記憶體、不寫入 log；簽章由錢包自行驗證。
 - **信任聯盟**（`/.well-known/openid-federation`，可選，`features` 加 `federation`）：以 OpenID Federation 1.0 發佈這台服務端的 Entity Configuration，在 `diw_wallet_server` 中繼資料中列出簽章根憑證指紋、網頁查驗端 DID、功能與設定摘要。錢包信任該聯盟的 Trust Anchor 時，加入服務端就不必再逐字比對指紋。設定 `federation_subordinates_file` 時，這台服務端也能當上級（Intermediate 或 Trust Anchor），提供 `/federation/fetch` 與 `/federation/list`。
+- **本專案 OPRF**（`/oprf/v1/*`，可選，`features` 加 `oprf`）：錢包以 zkPassport 電路產生「加鹽唯一識別碼」時使用的單一金鑰 OPRF（錢包 `docs/design/zkpassport.md` 5.5）。服務端只看到盲化後的點，看不到護照資料或私密 nullifier；金鑰只放在 secret，公鑰列在 `/oprf/v1/key` 與 `/info`。回答需要存取權杖，每個位址每小時有次數上限。需要含 `oprf` 的原生程式庫（錢包原生建置的 `zkpdf` 會一併開啟），否則 `/healthz` 回 503。
+- **自己的 zkPassport 證明器**（`/zkpassport/v1/jobs`，可選，`features` 加 `zkpassport`）：手機較慢或記憶體不足時，錢包把護照晶片的 SOD 與 DG1（不含照片 DG2）送到使用者自己的服務端產生 zkPassport 回應證明，再由手機送出。只接受持有專用權杖的請求（`zkpassport_token_sha256`，不沿用也不可等於可能分享出去的 zkTLS 權杖）；晶片資料與結果只放在記憶體，結果讀取一次即刪除，未讀取的 10 分鐘後刪除。一次證明一個，需要含 `zkpdf` 的原生程式庫（UltraHonk），否則 `/healthz` 回 503；記憶體高峰視護照簽章演算法而定，1 GB 主機可能不夠。建議與分享給他人的正式服務端分開，另跑一個只開 `zkpassport` 的實例。
+- **臨時證明器**（`diw-server prover`）：不需設定檔與權杖，在家用電腦執行後印出一次性的 QR Code，錢包掃描即可在同一個內網使用上面的證明器。只回應內網位址，以每次啟動新產生、由配對碼釘選的憑證走 TLS（手機正式版不允許內網明文 HTTP），配對碼用過一次即失效，之後的請求另以配對時導出的金鑰封裝並防止重送；關閉程式即結束。
 - **健康檢查**（`/healthz`）與**版本資訊**（`/info`，含設定摘要 `settingsSha256`）。
 
 zkPDF 證明器（S4）尚未實作。
@@ -148,6 +151,28 @@ Cloudflare Containers 以 Worker 加 Durable Object 轉送到容器，跑的是�
 - 閒置 `SLEEP_AFTER`（預設 20 分鐘）後休眠，下一個連線需冷啟動（容器 1 至 3 秒，加上 JVM 約 1 秒；原生映像約 0.2 秒）。
 - 版型包每次冷啟動都重新下載；台灣出口流量每 GB 0.05 美元（含 500 GB），個人用量通常用不完。
 
+### 臨時證明器下載與執行
+
+Release 附有 `diw-server prover` 可直接執行的版本，原生證明程式庫已含 zkPassport 需要的 UltraHonk：
+
+| 檔案 | 系統 | 需求 |
+| --- | --- | --- |
+| `diw-server-<版本>-all.jar` | 任何系統（Windows x86_64、macOS Apple silicon、Linux x86_64 與 ARM64） | Java 21 以上 |
+| `diw-server-<版本>-windows-x86_64.zip` | Windows 10 以上 | 無 |
+| `diw-server-<版本>-macos-aarch64.tar.gz` | macOS 14 以上（Apple silicon） | 無 |
+| `diw-server-<版本>-linux-x86_64.tar.gz`、`-linux-aarch64.tar.gz` | Linux | 無 |
+
+```sh
+java -jar diw-server-<版本>-all.jar prover   # jar 版
+./diw-server prover                          # 原生版（Windows 為 diw-server.exe prover）
+```
+
+- 電腦與手機要在同一個內網（或同一個 Tailscale 網路）。程式自動選內網位址，選錯時加 `--address <IP>`；埠預設 8090，可用 `--port` 改。
+- 第一次執行時 Windows 防火牆與 macOS 會詢問是否允許連入，請只允許私人網路。
+- macOS 從瀏覽器下載的原生版未經 Apple 公證，第一次執行前需 `xattr -d com.apple.quarantine diw-server`，或改用 jar 版。
+- Windows Terminal（Windows 11 預設）會直接畫出 QR Code；傳統主控台改把 QR Code 存成資料目錄中的 `pairing-code.svg` 並印出路徑，用瀏覽器開啟後掃描，程式結束時刪除。
+- 啟動後會下載約 130 MB 的 CRS 到 `DIW_DATA_DIR`（預設 `~/.diw-server`），之後沿用；證明時的記憶體高峰視護照簽章演算法而定，RSA 約 1 GB，P-521 等可到 2 GB。
+
 ### 原生執行檔（實驗）
 
 CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-server-<版本>-native`（x86_64 Linux）與映像 `ghcr.io/mctea01/diw-wallet-server:<版本>-native`。功能、設定、資料目錄與指令都和 JVM 版相同，只換掉執行方式：
@@ -171,6 +196,7 @@ CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-serve
 - 換鑰會讓根憑證指紋改變，所有錢包都要重新確認信任，請備份 `signing.pem`。
 - 存取權杖：設定只存 SHA-256（`DIW_ZKTLS_TOKEN_SHA256`，可用逗號列多個，方便輪換）。權杖本身交給要使用這台主機的人，填進錢包，或由錢包「分享設定」時勾選一併分享。
 - 行動自然人憑證 SP（`twfido`）：`DIW_TWFIDO_SERVICE_ID` 與 `DIW_TWFIDO_AES_KEY`（內政部核發，AES 金鑰為 base64 的 32 位元組）、`DIW_TWFIDO_TOKEN_SHA256`（未設定時沿用 `DIW_ZKTLS_TOKEN_SHA256`；錢包只填一個權杖，兩者都要含錢包用的那個），測試帳號另設 `DIW_TWFIDO_ENVIRONMENT=uat`。AES 金鑰和其他秘密一樣只放在權限 0600 的 `server.conf`（或平台的 secret）。
+- OPRF 金鑰（`oprf`）：`diw-server oprf-keygen` 印出新金鑰（`DIW_OPRF_KEY=0x…`，有原生 OPRF 時一併印出公鑰），和其他秘密一樣只放在權限 0600 的 `server.conf`（或平台的 secret）。`DIW_OPRF_TOKEN_SHA256` 未設定時沿用 `DIW_ZKTLS_TOKEN_SHA256`。換鑰時改 `DIW_OPRF_KEY_ID`；換鑰後所有加鹽識別碼都會改變，舊的不再對得上。
 - 金鑰、權杖與憑證從不寫入 log。
 
 ### 錢包端

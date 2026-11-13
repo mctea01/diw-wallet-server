@@ -26,7 +26,7 @@ object ConfigKeys {
     val groups: List<Pair<String, List<ConfigKey>>> = listOf(
         "General" to listOf(
             ConfigKey("public_url", null, "Address wallets use, e.g. https://diw.example.org; session links, relay and web verifier URLs are built from it.", required = true, example = "https://diw.example.org"),
-            ConfigKey("features", "relay", "Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation."),
+            ConfigKey("features", "relay", "Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport."),
             ConfigKey("acme_email", null, "Contact address for the certificate authority; read by the bundled Caddy configuration, not by the server.", example = "admin@example.org"),
         ),
         "Deployment (platform defaults apply when unset)" to listOf(
@@ -87,6 +87,19 @@ object ConfigKeys {
             ConfigKey("federation_key_pem", null, "The federation key PEM inline (a platform secret); wins over the file.", secret = true),
             ConfigKey("federation_subordinates_file", null, "JSON file of subordinate entities; makes this server an intermediate or Trust Anchor (fetch and list endpoints)."),
             ConfigKey("federation_lifetime_hours", "24", "Validity of the statements this server signs."),
+        ),
+        "Project OPRF for zkPassport salted identifiers (features=oprf)" to listOf(
+            ConfigKey("oprf_key", null, "OPRF key, a BabyJubJub scalar (diw-server oprf-keygen prints one); required with oprf.", secret = true),
+            ConfigKey("oprf_key_id", "1", "Id published with the public key; change it when the key is rotated."),
+            ConfigKey("oprf_token_sha256", null, "SHA-256 of the evaluation access tokens; defaults to zktls_token_sha256."),
+            ConfigKey("oprf_per_address", "20", "Evaluations from one client address per hour."),
+            ConfigKey("oprf_total", "2000", "Evaluations in all per hour."),
+        ),
+        "Own zkPassport prover (features=zkpassport)" to listOf(
+            ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport and never one of zktls_token_sha256."),
+            ConfigKey("zkpassport_queue", "2", "Jobs that may wait behind the one being proved."),
+            ConfigKey("zkpassport_rpc", null, "Ethereum mainnet node for zkPassport's registries; defaults to the wallet's public node."),
+            ConfigKey("zkpassport_sepolia_rpc", null, "Ethereum Sepolia node for test requests; defaults to the wallet's public node."),
         ),
     )
 

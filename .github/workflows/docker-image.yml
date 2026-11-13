@@ -16,9 +16,10 @@ permissions:
 env:
   LANG: C.UTF-8
   JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
-  # The zkTLS verifier host needs TLSNotary; OpenAC serves bonds_age_verify. A missing toolchain fails the build.
+  # The zkTLS verifier host needs TLSNotary; OpenAC serves bonds_age_verify; zkpdf brings UltraHonk for the own
+  # zkPassport prover and bb5 the Barretenberg 5 library for circuits before 0.22.0. A missing toolchain fails the build.
   DIW_ZK_NATIVE: require
-  DIW_ZK_FEATURES: openac,tlsn
+  DIW_ZK_FEATURES: openac,tlsn,oprf,zkpdf,bb5
 
 jobs:
   build:
@@ -36,8 +37,8 @@ jobs:
       # android-actions/setup-android@v3 fails with cmdline-tools 16.0, which no longer has the "tools" package.
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       # Rust is on the runner image; wallet/native/rust-toolchain.toml installs the pinned version on first use.
-      - name: Native build tools (protoc and libclang for OpenAC)
-        run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev
+      - name: Native build tools (protoc and libclang for OpenAC, Ninja and CMake for Barretenberg)
+        run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev ninja-build cmake
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wallet/native -> target
@@ -107,8 +108,8 @@ jobs:
           distribution: graalvm-community
           set-java-home: false
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
-      - name: Native build tools (protoc and libclang for OpenAC)
-        run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev
+      - name: Native build tools (protoc and libclang for OpenAC, Ninja and CMake for Barretenberg)
+        run: sudo apt-get update -q && sudo apt-get install -y -q protobuf-compiler libclang-dev ninja-build cmake
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wallet/native -> target
@@ -170,3 +171,4 @@ jobs:
           # The build job creates the release; wait for it, then add the executable.
           for i in $(seq 1 30); do gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 && break; sleep 10; done
           gh release upload "${GITHUB_REF_NAME}" "diw-server-${GITHUB_REF_NAME#v}-native" --clobber
+          
