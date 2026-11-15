@@ -143,7 +143,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 - 計算沿用錢包原生程式庫的 `oprf_evaluate`（TACEO `taceo-oprf-core`）：回應為金鑰乘以盲化點，附 Chaum-Pedersen 證明；錢包以 `/oprf/v1/key` 的公鑰核對證明，再解盲成電路的 `nullifier_secret`。zkPassport 的揭露電路已實測接受此證明。
 - 服務端只看到盲化點（隨機純量乘上雜湊到曲線的私密 nullifier），看不到 nullifier、護照資料或結果；請求不寫入 log、不保存。
-- 授權（第一版）：存取權杖（只存 SHA-256，`oprf_token_sha256` 未設定時沿用 `zktls_token_sha256`）加每個位址每小時 `oprf_per_address`（預設 20）、全部 `oprf_total`（預設 2000）次。第二版加入本專案 FaceMatch 證明（需要 Play Integrity 金鑰），之前的識別碼在錢包與查驗端標示「未經人臉比對」。
+- 授權（第一版）：存取權杖（只存 SHA-256，`oprf_token_sha256` 未設定時沿用 `zktls_token_sha256`）加每個位址每小時 `oprf_per_address`（預設 20）、全部 `oprf_total`（預設 2000）次。第二版加入 FaceMatch 證明（本專案的金鑰證明版不需要 Play Integrity，見 3.9；尚未做），之前的識別碼在錢包與查驗端標示「未經人臉比對」。
 - 金鑰：`oprf_key`（BabyJubJub 純量，`diw-server oprf-keygen` 產生，secret），`oprf_key_id`（預設 `1`）隨公鑰公開。換鑰時產生新金鑰並改 `oprf_key_id`；舊識別碼全部失效，錢包與查驗端以新公鑰雜湊為準。
 - 原生程式庫要含 `oprf`；`DIW_ZK_FEATURES` 未含時 `/oprf/*` 與 `/healthz` 回 503。
 
@@ -153,11 +153,12 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 | 方法 | 路徑 | 說明 |
 |---|---|---|
-| POST | `/zkpassport/v1/jobs` | 需 `Authorization: Bearer <權杖>`；JSON `{sod, dg1, query, domain, scope, dev_mode, circuit_version}`（`sod`、`dg1` 為 base64；證明日期取服務端時鐘，請求不能指定），回 202 `{id}` |
+| POST | `/zkpassport/v1/jobs` | 需 `Authorization: Bearer <權杖>`；JSON `{sod, dg1, query, domain, scope, dev_mode, circuit_version, facematch?}`（`sod`、`dg1` 為 base64；證明日期取服務端時鐘，請求不能指定），回 202 `{id}` |
 | GET | `/zkpassport/v1/jobs/{id}` | 需權杖；`{state: queued\|registry\|proving, index, total, name}`，完成時 `{state: done, result: {proofs, messages, query_result}}`，失敗時 `{state: failed, code}` |
 | DELETE | `/zkpassport/v1/jobs/{id}` | 需權杖；取消並刪除 |
 
 - 證明沿用錢包 core 的 `ZkPassportProver`（官方 Rust 輸入產生與 driver，電路逐一核對 vkey 雜湊後才執行），與手機上完全相同；不需要 DG2，DG2 雜湊取自 SOD。
+- 人臉比對（2026-11-15，錢包 PR #134）：請求要求 FaceMatch 時，`facematch` 帶手機已完成並簽署的比對 `{strict, app_id, chain, client_data, signature, signer_digest}`（金鑰證明版；後四項為 base64 或十六進位，缺全部四項即自我聲明版）。相機比對與簽署都在手機上，照片與人臉不離開手機；服務端只檢查大小與格式，憑證鏈由原生程式庫解析，其餘由電路證明。金鑰證明版電路依憑證鏈形狀從錢包 repo 的 release `zkpassport-facematch-v1` 下載到資料目錄的 `zkpassport-cache`，核對 `circuits.json` 的驗證金鑰雜湊後才執行。
 - 晶片資料與結果只存在記憶體中的工作物件，不寫入磁碟或 log；工作識別碼為 128 位元亂數。完成或失敗的結果被讀取一次後刪除，未讀取的工作 10 分鐘後刪除。
 - 一次只跑一個工作，等待中的工作最多 `zkpassport_queue`（預設 2），已完成但未讀取的結果最多 4 個，超過都回 429；工作結束時立即釋放晶片資料，取消會立即通知原生證明器。權杖只存 SHA-256，必須設定專用的 `zkpassport_token_sha256`，且不可與 `zktls_token_sha256` 相同（啟動失敗）：zkTLS 權杖可能隨分享連結給了其他錢包，護照資料只能送進擁有者自己的證明器。
 - 以太坊節點由服務端設定（`zkpassport_rpc`、`zkpassport_sepolia_rpc`，未設定用錢包內建的公開節點），不接受請求指定網址。不使用 OPRF（回應時不加鹽，與手機相同）。

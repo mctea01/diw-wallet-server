@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-13（main 到 PR #34）。
+最後更新：2026-11-15（main 到 PR #35，加上本專案 FaceMatch 的轉送）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -12,7 +12,7 @@
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
-- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #127 合併後，由 PR #33 更新）。
+- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #134 合併後更新）。
 
 ## 2. 功能狀態
 
@@ -27,7 +27,7 @@
 | 行動自然人憑證簽署 `/twfido/sign` | `twfido` | 可用；沒有以真實 SP 帳號驗收 | `TwFidoHostTest`（本機模擬的內政部服務） | 需要內政部核發的 SP 帳號 |
 | 信任聯盟（OpenID Federation 1.0） | `federation` | 可用 | `FederationTest` | 可當下級，也可當上級 |
 | 本專案 OPRF `/oprf/v1/*` | `oprf` | 可用 | `OprfHostTest` | 需要含 `oprf` 的原生程式庫 |
-| 自己的 zkPassport 證明器 `/zkpassport/v1/jobs` | `zkpassport` | 可用 | `ZkPassportHostTest`、`ZkPassportClientInteropTest` | 需要含 `zkpdf` 的原生程式庫；1 GB 主機可能不夠 |
+| 自己的 zkPassport 證明器 `/zkpassport/v1/jobs` | `zkpassport` | 可用 | `ZkPassportHostTest`、`ZkPassportClientInteropTest` | 需要含 `zkpdf` 的原生程式庫；1 GB 主機可能不夠；本專案 FaceMatch（手機比對並簽署後轉送）的金鑰證明版要等錢包 release `zkpassport-facematch-v1` 發佈 |
 | 臨時證明器 `diw-server prover` | 指令 | 可用 | `ZkPassportPairingTest` | 內網限定、一次性 QR 配對 |
 | 健康檢查與版本資訊 `/healthz`、`/info` | 固定 | 可用 | `ServerTest`、`ConfigTest` | |
 | GraalVM 原生執行檔與 `-native` 映像 | | 實驗 | zkTLS 端對端測試可改對原生執行檔執行 | JVM 版仍是預設 |
@@ -59,7 +59,7 @@
 - 乾淨 VPS 依 README 部署：Caddy 取得憑證、手機可連線。
 - Cloud Run 與 Cloudflare Containers 的實際部署。
 - 以真實的內政部 SP 帳號完成行動自然人憑證簽署。
-- 自己的 zkPassport 證明器與臨時證明器搭配實體護照與手機。
+- 自己的 zkPassport 證明器與臨時證明器搭配實體護照與手機，含 FaceMatch 的真實金鑰證明憑證鏈。
 - 臨時證明器在真正的 Windows、macOS 與 Linux ARM64 上執行。
 
 ## 5. 外部條件

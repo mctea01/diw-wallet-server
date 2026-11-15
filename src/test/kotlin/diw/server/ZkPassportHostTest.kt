@@ -174,6 +174,83 @@ class ZkPassportHostTest {
         assertEquals(HttpStatusCode.NotFound, call("GET", "/zkpassport/v1/jobs/not-an-id").status)
     }
 
+    /** The face comparison made on the phone reaches the prover as it was signed; a malformed one is refused. */
+    @Test
+    fun aFaceMatchRequestCarriesThePhonesComparison() = testApplication {
+        val seen = CompletableDeferred<ZkPassportProver.Job>()
+        val proving = ZkPassportProving { _, job, _ ->
+            seen.complete(job)
+            throw ZkPassportProver.Failure("unsupported")
+        }
+        val server = Server(config(), zkPassportProving = proving, zkPassportAvailable = true)
+        application { module(server) }
+        fun with(face: JsonObject) = JsonObject(Json.parseToJsonElement(request()).jsonObject + ("facematch" to face)).toString()
+        suspend fun post(body: String) = client.post("/zkpassport/v1/jobs") {
+            header("Authorization", "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+        val digest = "ab".repeat(32)
+        val attested = buildJsonObject {
+            put("strict", true)
+            put("app_id", "diw.wallet.example")
+            put("chain", kotlinx.serialization.json.buildJsonArray {
+                listOf(byteArrayOf(0x30, 0x01), byteArrayOf(0x30, 0x02), byteArrayOf(0x30, 0x03)).forEach { add(JsonPrimitive(b64.encodeToString(it))) }
+            })
+            put("client_data", b64.encodeToString(byteArrayOf(0x7b, 0x7d)))
+            put("signature", b64.encodeToString(byteArrayOf(0x30, 0x06)))
+            put("signer_digest", digest)
+        }
+        fun without(key: String) = JsonObject(attested - key)
+        fun replaced(key: String, value: kotlinx.serialization.json.JsonElement) = JsonObject(attested + (key to value))
+        for (bad in listOf(
+            without("signature"),
+            without("strict"),
+            replaced("strict", JsonPrimitive("true")),
+            replaced("app_id", JsonPrimitive("bad id")),
+            replaced("signer_digest", JsonPrimitive("ab")),
+            replaced("chain", kotlinx.serialization.json.JsonArray(emptyList())),
+            replaced("client_data", JsonPrimitive("not base64!")),
+        )) assertEquals(HttpStatusCode.BadRequest, post(with(bad)).status, bad.toString())
+        assertEquals(HttpStatusCode.BadRequest, post(with(buildJsonObject { put("strict", false) })).status)
+
+        assertEquals(HttpStatusCode.Accepted, post(with(attested)).status)
+        val face = seen.await().faceMatch!!
+        assertTrue(face.strict)
+        assertEquals("diw.wallet.example", face.appId)
+        assertEquals("keyattest", face.kind)
+        val attestation = face.attestation!!
+        assertEquals(3, attestation.chain.size)
+        assertTrue(attestation.chain[2].contentEquals(byteArrayOf(0x30, 0x03)))
+        assertTrue(attestation.clientData.contentEquals(byteArrayOf(0x7b, 0x7d)))
+        assertEquals(digest, attestation.signerDigest)
+    }
+
+    /** Without attestation fields the comparison is the self-declared kind. */
+    @Test
+    fun aSelfDeclaredFaceMatchHasNoAttestation() = testApplication {
+        val seen = CompletableDeferred<ZkPassportProver.Job>()
+        val server = Server(config(), zkPassportProving = { _, job, _ ->
+            seen.complete(job)
+            throw ZkPassportProver.Failure("unsupported")
+        }, zkPassportAvailable = true)
+        application { module(server) }
+        val body = JsonObject(Json.parseToJsonElement(request()).jsonObject + ("facematch" to buildJsonObject {
+            put("strict", false)
+            put("app_id", "diw.wallet.example")
+        }))
+        val created = client.post("/zkpassport/v1/jobs") {
+            header("Authorization", "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(body.toString())
+        }
+        assertEquals(HttpStatusCode.Accepted, created.status)
+        val face = seen.await().faceMatch!!
+        assertEquals("self", face.kind)
+        assertNull(face.attestation)
+        assertTrue(!face.strict)
+    }
+
     @Test
     fun aFailureKeepsOnlyItsCode() = testApplication {
         val server = Server(config(), zkPassportProving = { _, _, _ -> throw ZkPassportProver.Failure("proof:x:acir_input") }, zkPassportAvailable = true)
