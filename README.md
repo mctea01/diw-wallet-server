@@ -1,8 +1,18 @@
 # diw-wallet-server
 
-[DIW MY WALLET](https://github.com/mctea01/my-Bonds-fork-android) 的正式環境服務端。設計與里程碑見 [docs/DESIGN.md](docs/DESIGN.md)。
+[DIW MY WALLET](https://github.com/mctea01/my-Bonds-fork-android) 的正式環境服務端。
 
-目前功能：
+> 狀態：版本 0.1.0，功能都有自動測試，還沒有發佈過正式映像，也沒有實機部署的驗收紀錄。做到哪裡、還缺什麼見 [docs/STATUS.md](docs/STATUS.md)。
+
+| 想知道 | 讀這份 |
+|---|---|
+| 目前狀態、未完成與待驗收 | [docs/STATUS.md](docs/STATUS.md) |
+| 介面、金鑰與信任、部署的設計與理由 | [docs/DESIGN.md](docs/DESIGN.md) |
+| 開發規則 | [AGENTS.md](AGENTS.md) |
+| Fork 之後要設定什麼 | [docs/fork-setup.md](docs/fork-setup.md) |
+| 第三方元件與授權 | [NOTICE](NOTICE)、[LICENSE](LICENSE) |
+
+## 功能
 
 - **中繼**（`/zktls/relay/{room}`）：讓不在同一網路的兩個裝置連線。只轉送端對端加密的資料，不儲存任何內容。
 - **zkTLS 查驗主機**（`/zktls/*`，`features` 加 `zktls`）：以 TLSNotary 的 proxy 模式查驗持有人對政府查驗頁的網頁證明，並簽發網頁證明回執。只查驗已安裝簽章版型包中的頁面；建立查驗需要存取權杖，主機只存權杖的 SHA-256。簽章金鑰的根憑證指紋列在 `/info`，錢包加入服務端時讓使用者比對後加入信任。
@@ -15,7 +25,7 @@
 - **臨時證明器**（`diw-server prover`）：不需設定檔與權杖，在家用電腦執行後印出一次性的 QR Code，錢包掃描即可在同一個內網使用上面的證明器。只回應內網位址，以每次啟動新產生、由配對碼釘選的憑證走 TLS（手機正式版不允許內網明文 HTTP），配對碼用過一次即失效，之後的請求另以配對時導出的金鑰封裝並防止重送；關閉程式即結束。
 - **健康檢查**（`/healthz`）與**版本資訊**（`/info`，含設定摘要 `settingsSha256`）。
 
-zkPDF 證明器（S4）尚未實作。
+沒有 zkPDF 證明器：錢包的「送到自架主機產生」用的是錢包 repo 的 `tools/zk-prover-server`。
 
 ## 部署
 
@@ -50,7 +60,7 @@ cp deploy/server.conf.example server.conf   # 填入 DIW_PUBLIC_URL 與 DIW_ACME
 docker compose up -d
 ```
 
-- 映像由 CI 在推送 `v*` 標籤時發佈到 `ghcr.io/mctea01/diw-wallet-server`。
+- 映像由 CI 在推送 `v*` 標籤時發佈到 `ghcr.io/mctea01/diw-wallet-server`。目前還沒有發佈過標籤，見 [docs/STATUS.md](docs/STATUS.md)；在那之前要自行建置（見「開發」）。
 - 兩個容器都讀 `server.conf`：服務讀全部設定，Caddy 只用 `DIW_PUBLIC_URL` 與 `DIW_ACME_EMAIL`。服務的健康檢查通過後，Caddy 才會啟動。
 - 查看狀態：`docker compose ps`。查看紀錄：`docker compose logs`。更新：`docker compose pull && docker compose up -d`。
 - 啟用 zkTLS 查驗主機：在 `server.conf` 設 `DIW_FEATURES=relay,zktls,bonds-age`，執行 `docker compose run --rm server hash-token` 輸入自訂的權杖（至少 16 字元），把印出的值填進 `DIW_ZKTLS_TOKEN_SHA256`，再 `docker compose up -d`。簽章金鑰會自動產生在 `server-data` volume，請備份其中的 `signing.pem`（`docker compose cp server:/var/lib/diw-server/signing.pem .`）。
@@ -243,4 +253,4 @@ docker build -f Dockerfile.native -t diw-wallet-server:native .
 
 ## 授權
 
-Apache-2.0，見 [LICENSE](LICENSE)。
+Apache-2.0，見 [LICENSE](LICENSE)。第三方元件與各自的授權列在 [NOTICE](NOTICE)；錢包 `core` 與原生程式庫帶進來的元件列在錢包 repo 的 NOTICE。

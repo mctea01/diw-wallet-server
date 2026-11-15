@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.4.21"
-ktor = "3.6.0"
+ktor = "3.6.1"
 coroutines = "1.11.0"
 serialization = "1.12.0"
 # Kept in step with the wallet (wallet/gradle/libs.versions.toml).

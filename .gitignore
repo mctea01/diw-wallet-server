@@ -1,8 +1,34 @@
+# Build output
 build/
 .gradle/
 .kotlin/
-.env
+out/
+*.hprof
+hs_err_pid*.log
 *.log
+
+# IDE and OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
 # Local settings and keys: server.conf holds tokens and keys (deploy/server.conf.example stays tracked).
+.env
+.env.*
+!.env.example
 /server.conf
 /*.pem
+/*.key
+/*.p12
+/*.jks
+local.properties
+
+# Cloudflare deployment
+node_modules/
+.wrangler/
+.dev.vars
+
+# Pairing code of the temporary prover, should it be written into the working directory
+pairing-code.svg

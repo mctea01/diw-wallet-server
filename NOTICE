@@ -1,0 +1,81 @@
+diw-wallet-server
+Copyright 2026 LIN, CHE-CHUAN
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes or links the third-party software listed below, each
+under its own license. Exact versions are pinned in gradle/libs.versions.toml
+and by the wallet submodule (wallet/); this file names a version only where
+the provenance depends on it. When a dependency is added, removed or replaced,
+update this file in the same change.
+
+========================================================================
+1. Server program (jar, distribution tar, container images, prover downloads)
+========================================================================
+
+- DIW MY WALLET core (the wallet/ submodule,
+  https://github.com/mctea01/my-Bonds-fork-android) - Apache License 2.0.
+  The server uses its protocol code and its native proof library. Every
+  third-party component that comes with them (Multipaz, Bouncy Castle, JNA,
+  Titanium JSON-LD, Jakarta JSON Processing, SQLite JDBC, Tink and others on
+  the JVM side; TLSNotary, OpenAC, Noir, Barretenberg, zkPassport crates and
+  others in the native library) is listed in wallet/NOTICE and
+  wallet/native/zkpdf-prover/NOTICE, which apply to this product as well.
+- Kotlin standard library, kotlinx.coroutines, kotlinx.serialization -
+  Apache License 2.0
+- Ktor (server core, CIO engine, WebSockets, forwarded-header; Java client) -
+  Apache License 2.0
+- ZXing core (com.google.zxing:core, pairing and sharing QR Codes) - Apache
+  License 2.0
+- SLF4J API and SLF4J Simple - MIT License
+
+========================================================================
+2. Runtimes and base images
+========================================================================
+
+- Java runtime in the distribution tar (runtime/) and in the container image:
+  a jlink image of Eclipse Temurin (OpenJDK) 21 - GNU GPL 2.0 with the
+  Classpath Exception. The -all.jar download carries no Java runtime.
+- Native executables (the -native release file and image, and the prover
+  downloads for each system) are built with GraalVM Community native-image
+  and contain its Substrate VM runtime and the JDK class library - GNU GPL
+  2.0 with the Classpath Exception
+- Container images are built on the ubuntu:24.04 base image; its packages
+  keep their own licenses (see /usr/share/doc/*/copyright in the image)
+- Windows prover downloads carry the llvm-mingw runtime of the wallet's
+  native library (see wallet/NOTICE)
+
+========================================================================
+3. Deployment files (referenced, not redistributed)
+========================================================================
+
+- Caddy (compose.yaml pulls the caddy:2 image; deploy/caddy/Caddyfile) -
+  Apache License 2.0
+- Cloudflare deployment (deploy/cloudflare): @cloudflare/containers,
+  wrangler and @cloudflare/workers-types - MIT or Apache License 2.0;
+  TypeScript - Apache License 2.0. They are installed by npm at deploy time.
+
+========================================================================
+4. Downloaded at run time (not embedded)
+========================================================================
+
+- zkTLS template packs are downloaded from the wallet project's releases and
+  verified against the public keys pinned in the wallet's core.
+- With bonds_age_verify the server downloads the openac-age-v1 assets (Bonds
+  R1CS and keys, compiled from zkID circuits and circomlib templates). They
+  are distributed separately under GPL-3.0 and are not linked into the
+  server; see wallet/NOTICE for the corresponding source.
+- The zkPassport prover downloads the BN254 CRS (the public Aztec Ignition
+  ceremony transcript prefix) and the registry data and circuit artifacts
+  the zkPassport project publishes.
+
+========================================================================
+5. Development and test tools (not shipped)
+========================================================================
+
+- Ktor test host and WebSocket client, Bouncy Castle bcpkix (tests) - Apache
+  License 2.0 and MIT-style Bouncy Castle License
+- GraalVM Native Build Tools Gradle plugin (org.graalvm.buildtools.native) -
+  Universal Permissive License 1.0
+- Rust toolchain, Android SDK and the native build tools the wallet's
+  native/build.sh needs (see wallet/NOTICE)
