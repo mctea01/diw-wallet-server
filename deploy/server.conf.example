@@ -9,7 +9,7 @@
 # --- General ---
 # Address wallets use, e.g. https://diw.example.org; session links, relay and web verifier URLs are built from it.
 DIW_PUBLIC_URL=https://diw.example.org
-# Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport. Default: relay.
+# Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport, oid4vp. Default: relay.
 # DIW_FEATURES=relay
 # Contact address for the certificate authority; read by the bundled Caddy configuration, not by the server.
 # DIW_ACME_EMAIL=admin@example.org
@@ -127,6 +127,16 @@ DIW_PUBLIC_URL=https://diw.example.org
 # DIW_OPRF_PER_ADDRESS=20
 # Evaluations in all per hour. Default: 2000.
 # DIW_OPRF_TOTAL=2000
+
+# --- OpenID4VP mailbox for phone verifiers (features=oid4vp) ---
+# SHA-256 of the tokens that may open mailbox sessions; defaults to zktls_token_sha256.
+# DIW_OID4VP_TOKEN_SHA256=
+# Sessions kept at once (each lives at most 10 minutes). Default: 64.
+# DIW_OID4VP_MAX_SESSIONS=64
+# Sessions one client address may keep open. Default: 8.
+# DIW_OID4VP_PER_ADDRESS=8
+# Megabytes of request objects and encrypted responses kept in memory in all. Default: 32.
+# DIW_OID4VP_MAX_STORED_MB=32
 
 # --- Own zkPassport prover (features=zkpassport) ---
 # SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport and never one of zktls_token_sha256.
