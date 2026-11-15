@@ -1,6 +1,8 @@
 package diw.server
 
 import diw.wallet.core.util.DiwJson
+import diw.wallet.core.zkpassport.ZkPassportFaceMatchAttestation
+import diw.wallet.core.zkpassport.ZkPassportFaceMatchEvidence
 import diw.wallet.core.zkpassport.ZkPassportProver
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -46,7 +48,8 @@ fun interface ZkPassportProving {
 
 /**
  * The owner's own zkPassport prover (DESIGN 3.9): the wallet sends a passport's SOD and DG1 with the request it
- * answers and fetches the proofs it then sends through zkPassport's bridge itself. Proving is the wallet core's
+ * answers and fetches the proofs it then sends through zkPassport's bridge itself. A FaceMatch request also carries
+ * the face comparison the phone made and signed; the photo and the face never leave the phone. Proving is the wallet core's
  * [ZkPassportProver], so the same registry and key checks run as on the phone. Chip data and results live only in
  * memory, one job proves at a time, and a job is dropped once its outcome has been read or after [keep].
  */
@@ -172,13 +175,36 @@ class ZkPassportHost(
         if (o["scope"] != null && scope == null) return null
         val devMode = (o["dev_mode"] as? JsonPrimitive)?.booleanOrNull ?: false
         val version = text("circuit_version")?.takeIf { VERSION.matches(it) } ?: ZkPassportProver.CIRCUIT_VERSION
+        val faceMatch = o["facematch"]?.let { faceMatch(it as? JsonObject ?: return null) ?: return null }
         // The server's clock dates the proofs; the request cannot choose another day.
         val job = ZkPassportProver.Job(
             query = query, domain = domain, scope = scope, devMode = devMode, circuitVersion = version,
-            rpc = rpc(devMode), nowSeconds = clock().epochSeconds,
+            rpc = rpc(devMode), nowSeconds = clock().epochSeconds, faceMatch = faceMatch,
         )
         // DG2 stays on the phone: its hash comes from the SOD.
         return ZkPassportProver.Chip(sod, dg1, null) to job
+    }
+
+    /**
+     * The face comparison the wallet made and signed on the phone (`{strict, app_id, chain?, client_data?, signature?,
+     * signer_digest?}`); without the attestation fields it is the self-declared kind. Only sizes are checked here:
+     * the native library parses the chain and the circuit proves the rest.
+     */
+    private fun faceMatch(o: JsonObject): ZkPassportFaceMatchEvidence? {
+        fun text(key: String) = (o[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+        fun bytes(value: String?, max: Int) = value?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }?.takeIf { it.size in 1..max }
+        val strict = (o["strict"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: return null
+        val appId = text("app_id")?.takeIf { APP_ID.matches(it) } ?: return null
+        val attested = listOf("chain", "client_data", "signature", "signer_digest").filter { o[it] != null }
+        if (attested.isEmpty()) return ZkPassportFaceMatchEvidence(strict, appId, null)
+        if (attested.size != 4) return null
+        val chain = (o["chain"] as? JsonArray)?.takeIf { it.size in 1..MAX_CHAIN }?.map {
+            bytes((it as? JsonPrimitive)?.takeIf { p -> p.isString }?.contentOrNull, MAX_CERTIFICATE) ?: return null
+        } ?: return null
+        val clientData = bytes(text("client_data"), MAX_CLIENT_DATA) ?: return null
+        val signature = bytes(text("signature"), MAX_SIGNATURE) ?: return null
+        val digest = text("signer_digest")?.takeIf { DIGEST.matches(it) } ?: return null
+        return ZkPassportFaceMatchEvidence(strict, appId, ZkPassportFaceMatchAttestation(clientData, chain, signature, digest))
     }
 
     private fun progress(p: ZkPassportProver.Progress): JsonObject = buildJsonObject {
@@ -212,6 +238,12 @@ class ZkPassportHost(
         private val DOMAIN = Regex("^[A-Za-z0-9.:-]{1,253}$")
         private val VERSION = Regex("^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$")
         private val ID = Regex("^[0-9a-f]{32}$")
+        private const val MAX_CHAIN = 8
+        private const val MAX_CERTIFICATE = 8 shl 10
+        private const val MAX_CLIENT_DATA = 1 shl 10
+        private const val MAX_SIGNATURE = 1 shl 10
+        private val APP_ID = Regex("^[A-Za-z0-9._-]{1,100}$")
+        private val DIGEST = Regex("^[0-9A-Fa-f]{64}$")
 
         fun validId(id: String?): Boolean = id != null && ID.matches(id)
 
