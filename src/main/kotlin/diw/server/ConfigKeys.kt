@@ -26,7 +26,7 @@ object ConfigKeys {
     val groups: List<Pair<String, List<ConfigKey>>> = listOf(
         "General" to listOf(
             ConfigKey("public_url", null, "Address wallets use, e.g. https://diw.example.org; session links, relay and web verifier URLs are built from it.", required = true, example = "https://diw.example.org"),
-            ConfigKey("features", "relay", "Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport."),
+            ConfigKey("features", "relay", "Enabled features, comma separated: relay, zktls, bonds-age, verifier, twfido, federation, oprf, zkpassport, oid4vp."),
             ConfigKey("acme_email", null, "Contact address for the certificate authority; read by the bundled Caddy configuration, not by the server.", example = "admin@example.org"),
         ),
         "Deployment (platform defaults apply when unset)" to listOf(
@@ -94,6 +94,12 @@ object ConfigKeys {
             ConfigKey("oprf_token_sha256", null, "SHA-256 of the evaluation access tokens; defaults to zktls_token_sha256."),
             ConfigKey("oprf_per_address", "20", "Evaluations from one client address per hour."),
             ConfigKey("oprf_total", "2000", "Evaluations in all per hour."),
+        ),
+        "OpenID4VP mailbox for phone verifiers (features=oid4vp)" to listOf(
+            ConfigKey("oid4vp_token_sha256", null, "SHA-256 of the tokens that may open mailbox sessions; defaults to zktls_token_sha256."),
+            ConfigKey("oid4vp_max_sessions", "64", "Sessions kept at once (each lives at most 10 minutes)."),
+            ConfigKey("oid4vp_per_address", "8", "Sessions one client address may keep open."),
+            ConfigKey("oid4vp_max_stored_mb", "32", "Megabytes of request objects and encrypted responses kept in memory in all."),
         ),
         "Own zkPassport prover (features=zkpassport)" to listOf(
             ConfigKey("zkpassport_token_sha256", null, "SHA-256 of the owner's tokens that may send passport data for proving; required with zkpassport and never one of zktls_token_sha256."),

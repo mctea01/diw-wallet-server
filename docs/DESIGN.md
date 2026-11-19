@@ -185,6 +185,25 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
   - 每個系統都先以 jar、再以原生執行檔啟動證明器，`/healthz` 回 200（UltraHonk 已載入）才算通過；失敗時印出的 log 會濾掉配對連結與 QR Code。打 `v*` 標籤時附加到 `ci` 建立的 Release。
   - 傳統 Windows 主控台不顯示 ANSI 色彩，沒有 `WT_SESSION`（Windows Terminal）時改把 QR Code 寫成資料目錄中的 `pairing-code.svg` 並印出路徑（不放共用的暫存目錄），結束時刪除。
 
+### 3.11 OpenID4VP 轉送信箱（`oid4vp`）
+
+2026-11-15 使用者決定（錢包 P5，`docs/design/p5-verifier.md` 6.2）：手機當查驗方做線上查驗時，持卡人的回應經過服務端轉送；兩台都是 DIW 錢包且在同一個區網時也可直連，不經服務端。手機沒有固定的 https 網址，所以由服務端代收：查驗方的手機開一個工作階段，放上自己簽好的請求物件，持卡人的錢包從 `request_uri` 取得請求，把加密回應 POST 到 `response_uri`，查驗方的手機再取走回應。
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| POST | `/oid4vp/v1/sessions` | 需 `Authorization: Bearer <權杖>`；回 201 `{id, secret, request_uri, response_uri, expires_in}` |
+| PUT | `/oid4vp/v1/sessions/{id}/request` | 需 `Bearer <secret>`；本文為簽好的請求物件（最多 128 KB），回 204；再放一次會取代 |
+| GET | `/oid4vp/v1/sessions/{id}/response` | 需 `Bearer <secret>`；長輪詢最多 25 秒：有回應時回 200 `{response, state, ...}` 並結束工作階段，沒有時回 204，工作階段不存在或過期回 404 |
+| DELETE | `/oid4vp/v1/sessions/{id}` | 需 `Bearer <secret>`；立即結束 |
+| GET、POST | `/oid4vp/v1/req/{id}` | 持卡人取得請求物件（`application/oauth-authz-req+jwt`，`request_uri_method=post` 也回同一份） |
+| POST | `/oid4vp/v1/resp/{id}` | 持卡人送出回應（form，最多 4 MB），回 `{}`；只收第一份，之後回 409 |
+
+- 路徑、大小、存活時間與長輪詢時間取自錢包 core 的 `Oid4vpMailbox`，查驗方的用戶端是 core 的 `Oid4vpMailboxClient`，兩邊一致。
+- 服務端看不到揭露的內容：請求固定為 `direct_post.jwt`，回應以查驗方手機每次新產生的金鑰加密（JWE），服務端只轉存密文。請求物件由查驗方自己的金鑰簽署（X.509 或 DID），服務端不簽也不改。
+- 只保留回應的 `response`、`vp_token`、`state`、`error`、`error_description`，其餘欄位丟棄。回應被取走一次即刪除；未取走的工作階段 10 分鐘後刪除。全部只在記憶體，不寫入磁碟或 log。
+- 工作階段識別碼與秘密各為 32 bytes 亂數；秘密只存 SHA-256。`request_uri` 與 `response_uri` 不需權杖（持卡人的錢包不會有），靠識別碼不可猜測與只收一份回應保護。
+- 限制：同時 `oid4vp_max_sessions`（預設 64）、每個位址 `oid4vp_per_address`（預設 8），請求與回應合計最多 `oid4vp_max_stored_mb`（預設 32 MB），超過回 429 或 503。開工作階段的權杖為 `oid4vp_token_sha256`，未設定時沿用 `zktls_token_sha256`（錢包只填一個權杖）。
+
 ## 4. 金鑰與信任
 
 - 簽章金鑰：P-256，用來簽查驗請求（`x5c`）與網頁證明回執。憑證鏈為自簽根加葉憑證（葉憑證的 dNSName 為 `public_url` 的主機），效期 20 年；整份存成一個 PEM（私鑰後接葉憑證與根）。
@@ -267,7 +286,7 @@ API 與 Bonds 查驗網站及錢包的測試伺服器相同，錢包的年齡查
 
 ## 7. 隱私與安全
 
-- 中繼只轉送密文。查驗主機只看到持有人揭露的回應片段，與錢包內查驗方看到的相同。查詢輸入（證號、驗證碼、cookie）不會出現在主機。
+- 中繼與 OpenID4VP 轉送信箱只轉送密文。查驗主機只看到持有人揭露的回應片段，與錢包內查驗方看到的相同。查詢輸入（證號、驗證碼、cookie）不會出現在主機。
 - 不保存逐字紀錄與查驗結果；工作階段過期即刪除。
 - log 不含請求內容、揭露值、權杖與 IP 以外的識別資料。
 - 依賴更新：Dependabot 或 Renovate；映像以 digest 釘選基底。

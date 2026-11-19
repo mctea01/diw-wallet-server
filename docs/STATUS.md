@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-15（main 到 PR #35，加上本專案 FaceMatch 的轉送）。
+最後更新：2026-11-19（main 到 PR #38，加上錢包 P5 線上查驗用的 OpenID4VP 轉送信箱；錢包 PR #152 已合併，submodule 指向錢包 main）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -10,9 +10,9 @@
 
 - 版本 `0.1.0`（[version.txt](../version.txt)）。還沒有推送 `v*` 標籤，所以 ghcr.io 上沒有正式映像，也沒有 Release；要部署得先推標籤或自行建置。
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
-- S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）。
+- S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）；OpenID4VP 轉送信箱在錢包 P5 的 PR 中（見第 4 節）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
-- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #134 合併後更新）。
+- 錢包以 git submodule 釘選在 `wallet/`。main 釘的是錢包 main 上的 commit（錢包 PR #152 合併後更新）。
 
 ## 2. 功能狀態
 
@@ -28,6 +28,7 @@
 | 信任聯盟（OpenID Federation 1.0） | `federation` | 可用 | `FederationTest` | 可當下級，也可當上級 |
 | 本專案 OPRF `/oprf/v1/*` | `oprf` | 可用 | `OprfHostTest` | 需要含 `oprf` 的原生程式庫 |
 | 自己的 zkPassport 證明器 `/zkpassport/v1/jobs` | `zkpassport` | 可用 | `ZkPassportHostTest`、`ZkPassportClientInteropTest` | 需要含 `zkpdf` 的原生程式庫；1 GB 主機可能不夠；本專案 FaceMatch（手機比對並簽署後轉送）的金鑰證明版要等錢包 release `zkpassport-facematch-v1` 發佈 |
+| OpenID4VP 轉送信箱 `/oid4vp/v1/*` | `oid4vp` | 可用 | `Oid4vpMailboxTest`（以錢包 core 的用戶端對路由） | 手機查驗方的線上查驗；只轉存加密回應 |
 | 臨時證明器 `diw-server prover` | 指令 | 可用 | `ZkPassportPairingTest` | 內網限定、一次性 QR 配對 |
 | 健康檢查與版本資訊 `/healthz`、`/info` | 固定 | 可用 | `ServerTest`、`ConfigTest` | |
 | GraalVM 原生執行檔與 `-native` 映像 | | 實驗 | zkTLS 端對端測試可改對原生執行檔執行 | JVM 版仍是預設 |
@@ -52,6 +53,7 @@
 - S4 zkPDF 證明器。
 - 待合併的相依更新：GraalVM 建置外掛（PR #29）、兩個 GitHub Action 的 digest（PR #31、#32）。
 - 第一個 `v*` 標籤與 Release。
+- OpenID4VP 轉送信箱：新增路由後的 GraalVM 原生中繼資料（`tools/native-metadata.sh`，需 GraalVM 21）尚未重新產生，原生執行檔版可能缺少這組路由用到的反射設定。
 
 待實機驗收（由部署的人執行，沒有紀錄）：
 
@@ -60,6 +62,7 @@
 - Cloud Run 與 Cloudflare Containers 的實際部署。
 - 以真實的內政部 SP 帳號完成行動自然人憑證簽署。
 - 自己的 zkPassport 證明器與臨時證明器搭配實體護照與手機，含 FaceMatch 的真實金鑰證明憑證鏈。
+- 兩台手機透過 OpenID4VP 轉送信箱完成線上查驗。
 - 臨時證明器在真正的 Windows、macOS 與 Linux ARM64 上執行。
 
 ## 5. 外部條件

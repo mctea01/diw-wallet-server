@@ -144,6 +144,10 @@ class Server(
     val oprf: OprfHost? = if (ServerConfig.FEATURE_OPRF !in config.features) null else
         OprfHost(config.oprfKey!!, config.oprfKeyId, config.oprf)
 
+    /** The OpenID4VP mailbox for phone verifiers; requests and encrypted responses stay in memory. */
+    val oid4vp: Oid4vpMailboxHost? = if (ServerConfig.FEATURE_OID4VP !in config.features) null else
+        Oid4vpMailboxHost(config.publicUrl, config.oid4vp)
+
     /** The CRS the zkPassport prover shares with zkPDF, installed under the data directory at start. */
     private val zkAssets by lazy { FileZkAssetStore.bundled(File(config.dataDir, "zk-assets"), http) }
 
@@ -233,6 +237,7 @@ class Server(
         templates?.start(scope)
         zkTls?.start(scope)
         twFido?.start(scope)
+        oid4vp?.start(scope)
         if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
         if (oprf != null && oprf.publicKey == null) log.warn("The oprf feature is set but the native library has no OPRF")
         zkPassport?.let { host ->
@@ -330,6 +335,7 @@ fun Application.module(server: Server) {
         server.twFido?.let { twFidoRoutes(it, server.config.twFidoTokenHashes) }
         server.federation?.let { federationRoutes(it) }
         server.oprf?.let { oprfRoutes(it, server.config.oprfTokenHashes) }
+        server.oid4vp?.let { oid4vpMailboxRoutes(it, server.config.oid4vpTokenHashes) }
         server.zkPassport?.let { zkPassportRoutes(it, server.config.zkPassportTokenHashes, server.zkPassportPairing, server.jobs) }
     }
 }
