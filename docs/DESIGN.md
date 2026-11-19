@@ -28,6 +28,7 @@
 - 不用 Rust 重寫：zkTLS 查驗、描述檔檢查與回執簽發都在錢包的 `core`（`ZkTlsVerification`、`ZkTlsCheck`、`WebProofCredentials`）。重寫一份會讓兩邊的協定逐漸分歧。
 - `core` 的引用方式：錢包 repo 以 git submodule 釘選在指定 commit，用 Gradle composite build 建置。升級時改 submodule 指標，CI 驗證通過才發佈。
 - 原生程式庫：在 CI 以錢包的 `native/build.sh` 建置。映像與發行檔是 linux-x86_64，功能為 `openac,tlsn,oprf,zkpdf,bb5`；臨時證明器的下載另建各系統的版本（`zkpdf,bb5`）。VPS 不編譯 Rust。
+- 原生程式庫只在需要它的功能（`zktls`、`oprf`、`zkpassport`、`bonds_age_verify`）啟用時載入，其餘功能與程式庫無關，所以任何 CPU 與 glibc 都能啟動服務。Linux 的發行檔另附相容版（`linux-x86_64-compat`）：不含 Barretenberg，以 Zig 對 glibc 2.28 連結、基準指令集、不需 C++ 執行環境。錢包 `core` 的 `ZkNative` 依 `/proc/cpuinfo` 與能否開啟決定用哪一版（完整版的 Barretenberg 是 x86-64-v2，不支援的 CPU 不開啟，避免非法指令結束程序）。`native_library` 可指定另外建置的程式庫；`diw-server native-check` 印出結果與原因。
 - 建置需要 Android SDK：錢包的 `core` 是含 Android 目標的 Kotlin Multiplatform 函式庫，composite build 會一併設定。只在 CI 與開發機需要，執行環境不需要。
 - 容器映像只放建好的發行檔（`./gradlew installDist`），不在映像內編譯。
 

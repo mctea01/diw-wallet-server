@@ -34,6 +34,7 @@ object ConfigKeys {
             ConfigKey("listen_port", "8080", "Port to listen on; PORT is used when this is unset (Cloud Run).", deployment = true),
             ConfigKey("data_dir", "/var/lib/diw-server", "Data directory: native library, keys, template cache.", deployment = true),
             ConfigKey("trust_forwarded", null, "Take the client address from X-Forwarded-For; defaults to true on loopback and behind the platform's own proxy.", deployment = true),
+            ConfigKey("native_library", null, "A diw_zk library file built or downloaded for this host, loaded instead of the bundled ones (diw-server native-check shows which one runs and why others do not).", deployment = true),
         ),
         "Relay" to listOf(
             ConfigKey("relay_max_rooms", "64", "Rooms at once."),
