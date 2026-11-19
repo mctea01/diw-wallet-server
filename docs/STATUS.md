@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-15（main 到 PR #38，加上錢包 P5 線上查驗用的 OpenID4VP 轉送信箱）。
+最後更新：2026-11-19（main 到 PR #38，加上錢包 P5 線上查驗用的 OpenID4VP 轉送信箱；submodule 指向錢包 P5 分支，錢包 PR 合併後改指 main）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
