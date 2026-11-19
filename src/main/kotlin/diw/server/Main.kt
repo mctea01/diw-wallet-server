@@ -237,6 +237,7 @@ class Server(
         templates?.start(scope)
         zkTls?.start(scope)
         twFido?.start(scope)
+        oid4vp?.start(scope)
         if (zkTls != null && !tlsn) log.warn("The zktls feature is set but the native library has no TLSNotary backend")
         if (oprf != null && oprf.publicKey == null) log.warn("The oprf feature is set but the native library has no OPRF")
         zkPassport?.let { host ->

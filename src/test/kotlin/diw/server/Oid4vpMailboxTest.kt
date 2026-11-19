@@ -12,7 +12,10 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -150,6 +153,48 @@ class Oid4vpMailboxTest {
         assertNull(host.request(a1.id))
         assertEquals(0, host.size)
         assertNotNull(host.open("c"))
+    }
+
+    @Test
+    fun overlappingFetchesHandTheResponseOverOnce() = runBlocking<Unit> {
+        val host = Oid4vpMailboxHost("https://diw.example.org")
+        val s = host.open("a")!!
+        assertEquals(Oid4vpMailboxHost.Put.OK, host.putRequest(s.id, s.secret, requestObject))
+        val first = async { host.awaitResponse(s.id, s.secret, 10.seconds) }
+        val second = async { host.awaitResponse(s.id, s.secret, 10.seconds) }
+        delay(100)
+        assertEquals(Oid4vpMailboxHost.Post.OK, host.postResponse(s.id, mapOf("error" to "access_denied")))
+        val results = listOf(first.await(), second.await())
+        assertEquals(1, results.count { it is Oid4vpMailboxHost.Fetch.Answer })
+        assertEquals(1, results.count { it == Oid4vpMailboxHost.Fetch.NotFound })
+    }
+
+    @Test
+    fun aReplacedRequestStillCountsTheResponse() {
+        val host = Oid4vpMailboxHost("https://diw.example.org", MailboxLimits(maxStoredBytes = 100))
+        val s = host.open("a")!!
+        assertEquals(Oid4vpMailboxHost.Put.OK, host.putRequest(s.id, s.secret, "x".repeat(40)))
+        assertEquals(Oid4vpMailboxHost.Post.OK, host.postResponse(s.id, mapOf("response" to "y".repeat(40))))
+        assertEquals(Oid4vpMailboxHost.Put.FULL, host.putRequest(s.id, s.secret, "z".repeat(60)), "48 kept by the response plus 60")
+        assertEquals(Oid4vpMailboxHost.Put.OK, host.putRequest(s.id, s.secret, "z".repeat(50)))
+    }
+
+    @Test
+    fun abandonedSessionsExpireWithoutAnotherRequest() = runBlocking<Unit> {
+        var now = Instant.fromEpochSeconds(1_800_000_000)
+        val host = Oid4vpMailboxHost("https://diw.example.org", clock = { now })
+        val s = host.open("a")!!
+        assertEquals(Oid4vpMailboxHost.Put.OK, host.putRequest(s.id, s.secret, requestObject))
+        assertEquals(requestObject.length.toLong(), host.storedBytes)
+        now += Oid4vpMailbox.LIFETIME + 1.minutes
+        val scope = CoroutineScope(Dispatchers.Default)
+        try {
+            host.start(scope, 20.milliseconds)
+            delay(300)
+            assertEquals(0, host.storedBytes)
+        } finally {
+            scope.cancel()
+        }
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.form(body: String) {

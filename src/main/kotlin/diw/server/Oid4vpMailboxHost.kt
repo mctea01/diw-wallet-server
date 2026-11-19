@@ -17,6 +17,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -24,6 +28,7 @@ import kotlinx.serialization.json.put
 import java.security.MessageDigest
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /** Sessions the mailbox keeps at once, per client address, and the bytes of requests and responses it holds in all. */
@@ -55,6 +60,9 @@ class Oid4vpMailboxHost(
     /** A new session: id, secret, request_uri, response_uri and lifetime in seconds. */
     data class Opened(val id: String, val secret: String, val requestUri: String, val responseUri: String, val expiresIn: Long)
 
+    /** The bytes of requests and responses held, expired sessions included, for tests. */
+    internal val storedBytes: Long get() = synchronized(sessions) { stored() }
+
     /** The live session count, for tests and health. */
     val size: Int get() = synchronized(sessions) { purge(); sessions.size }
 
@@ -74,7 +82,7 @@ class Oid4vpMailboxHost(
     /** Stores the signed request object the holder will fetch; a second put replaces the first. */
     fun putRequest(id: String, secret: String?, requestObject: String): Put = synchronized(sessions) {
         val s = owned(id, secret) ?: return Put.NOT_FOUND
-        val other = stored() - s.size
+        val other = stored() - (s.request?.length ?: 0)
         if (other + requestObject.length > limits.maxStoredBytes) return Put.FULL
         s.request = requestObject
         Put.OK
@@ -112,15 +120,11 @@ class Oid4vpMailboxHost(
         val remaining = s.expiresAt - clock()
         withTimeoutOrNull(minOf(wait, remaining).coerceAtLeast(Duration.ZERO)) { s.answered.await() }
         return synchronized(sessions) {
-            val form = s.response
-            when {
-                form != null -> {
-                    sessions.remove(s.id)
-                    Fetch.Answer(form)
-                }
-                sessions[s.id] !== s || clock() >= s.expiresAt -> Fetch.NotFound
-                else -> Fetch.Waiting
-            }
+            // A fetch that overlapped another one finds the session already handed over and gone.
+            if (sessions[s.id] !== s || clock() >= s.expiresAt) return@synchronized Fetch.NotFound
+            val form = s.response ?: return@synchronized Fetch.Waiting
+            sessions.remove(s.id)
+            Fetch.Answer(form)
         }
     }
 
@@ -130,6 +134,16 @@ class Oid4vpMailboxHost(
         sessions.remove(s.id)
         s.answered.cancel()
         true
+    }
+
+    /** Periodic expiry, so an abandoned session does not stay in memory until the next request. */
+    fun start(scope: CoroutineScope, every: Duration = 30.seconds) {
+        scope.launch {
+            while (isActive) {
+                delay(every)
+                synchronized(sessions) { purge() }
+            }
+        }
     }
 
     private fun live(id: String): Session? {
