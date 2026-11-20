@@ -1,0 +1,74 @@
+name: Stable release
+
+# Publishes a stable release of the current main (docs/fork-setup.md, "發佈"). tools/stable-release.sh picks the
+# version, commits a new release line to version.properties when one is asked for and pushes it with the tag
+# v<major>.<minor>.<patch>; the ci and prover runs on that tag check the tag against the version and publish the
+# image, the release (marked latest) and its files.
+#
+# Pushing the version.properties commit to main needs a token that may bypass the branch rules: the secret
+# RELEASE_TOKEN (a fine-grained token of a repository admin with Contents read and write). Releasing the current
+# line ("keep") only pushes a tag and works with the workflow token.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: keep = release the current line as it is; minor / major = start the next line and release x.y.0
+        type: choice
+        options: [keep, minor, major]
+        default: keep
+      version:
+        description: Optional major.minor (for example 1.0) to start instead; overrides bump
+        required: false
+      dry_run:
+        description: Only print the version that would be released
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow on main (it was started on $GITHUB_REF)"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - name: Version and tag
+        id: tag
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: bash tools/stable-release.sh "${VERSION:-$BUMP}"
+      # A tag pushed with the workflow token starts no workflow, so start both on the tag. A tag pushed with
+      # RELEASE_TOKEN has already started them through their push trigger.
+      - name: Start ci and prover on the tag
+        if: steps.tag.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if [ "$HAS_RELEASE_TOKEN" != true ]; then
+            gh workflow run docker-image.yml --ref "$TAG"
+            gh workflow run prover.yml --ref "$TAG"
+          fi
+          {
+            echo "### Stable release $TAG"
+            echo
+            echo "Commit ${{ steps.tag.outputs.sha }}. The ci run on the tag publishes the image and the release; prover adds its files: $GITHUB_SERVER_URL/$GH_REPO/actions"
+          } >> "$GITHUB_STEP_SUMMARY"
