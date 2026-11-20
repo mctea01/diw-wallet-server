@@ -92,6 +92,9 @@ data class ServerConfig(
     /** SHA-256 of the tokens that may ask for an evaluation; defaults to the zkTLS tokens. */
     val oprfTokenHashes: List<ByteArray> = emptyList(),
     val oprf: OprfLimits = OprfLimits(),
+    /** SHA-256 of the tokens that may open OpenID4VP mailbox sessions; defaults to the zkTLS tokens. */
+    val oid4vpTokenHashes: List<ByteArray> = emptyList(),
+    val oid4vp: MailboxLimits = MailboxLimits(),
     /** SHA-256 of the tokens that may send passport data for proving; defaults to the zkTLS tokens. */
     val zkPassportTokenHashes: List<ByteArray> = emptyList(),
     /** Jobs that may wait behind the one being proved. */
@@ -175,6 +178,10 @@ data class ServerConfig(
             "oprf_token_sha256" to hex(oprfTokenHashes),
             "oprf_per_address" to oprf.perAddress.toString(),
             "oprf_total" to oprf.total.toString(),
+            "oid4vp_token_sha256" to hex(oid4vpTokenHashes),
+            "oid4vp_max_sessions" to oid4vp.maxSessions.toString(),
+            "oid4vp_per_address" to oid4vp.perAddress.toString(),
+            "oid4vp_max_stored_mb" to (oid4vp.maxStoredBytes shr 20).toString(),
             "zkpassport_token_sha256" to hex(zkPassportTokenHashes),
             "zkpassport_queue" to zkPassportQueue.toString(),
             "zkpassport_rpc" to zkPassportRpc,
@@ -203,9 +210,10 @@ data class ServerConfig(
         const val FEATURE_FEDERATION = "federation"
         const val FEATURE_OPRF = "oprf"
         const val FEATURE_ZKPASSPORT = "zkpassport"
+        const val FEATURE_OID4VP = "oid4vp"
         val FEATURES = setOf(
             FEATURE_RELAY, FEATURE_BONDS_AGE, FEATURE_VERIFIER, FEATURE_ZKTLS, FEATURE_TWFIDO, FEATURE_FEDERATION, FEATURE_OPRF,
-            FEATURE_ZKPASSPORT,
+            FEATURE_ZKPASSPORT, FEATURE_OID4VP,
         )
         const val DEFAULT_FILE = "/etc/diw-server/server.conf"
         const val DEFAULT_VERIFIER_NAME = "DIW 網頁查驗"
@@ -324,6 +332,10 @@ data class ServerConfig(
                 require(oprfKey != null && OprfHost.validKey(oprfKey)) { "The oprf feature needs oprf_key (diw-server oprf-keygen prints one)" }
                 require(oprfTokens.isNotEmpty()) { "The oprf feature needs oprf_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)" }
             }
+            val oid4vpTokens = hashes("oid4vp_token_sha256").ifEmpty { tokenHashes }
+            if (FEATURE_OID4VP in features) {
+                require(oid4vpTokens.isNotEmpty()) { "The oid4vp feature needs oid4vp_token_sha256 or zktls_token_sha256 (diw-server hash-token prints it)" }
+            }
             // No fallback to zktls_token_sha256: that token may be shared with other wallets, and passport data must
             // reach only the owner's prover.
             val zkPassportTokens = hashes("zkpassport_token_sha256")
@@ -412,6 +424,12 @@ data class ServerConfig(
                 oprf = OprfLimits(
                     perAddress = int("oprf_per_address", 20, 1..10_000),
                     total = int("oprf_total", 2000, 1..1_000_000),
+                ),
+                oid4vpTokenHashes = oid4vpTokens,
+                oid4vp = MailboxLimits(
+                    maxSessions = int("oid4vp_max_sessions", 64, 1..10_000),
+                    perAddress = int("oid4vp_per_address", 8, 1..1000),
+                    maxStoredBytes = int("oid4vp_max_stored_mb", 32, 1..4096).toLong() shl 20,
                 ),
                 zkPassportTokenHashes = zkPassportTokens,
                 zkPassportQueue = int("zkpassport_queue", 2, 0..16),
