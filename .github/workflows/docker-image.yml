@@ -1,5 +1,7 @@
-# Tests every push to main and every pull request; a v* tag also publishes the container image to GHCR and
-# attaches the distribution (with its Java runtime) to a GitHub release. The native job builds the experimental
+# Tests every push to main and every pull request; a v* tag (a stable release, tools/stable-release.sh) also publishes
+# the container image to GHCR and attaches the distribution (with its Java runtime) to a GitHub release whose body
+# comes from tools/release-notes.py (the download guide once at the top, then the changes). The Stable release
+# workflow starts this workflow on the tag with workflow_dispatch when it pushed the tag with the workflow token. The native job builds the experimental
 # GraalVM executable, runs the zkTLS end-to-end test against it and, on a tag, publishes <version>-native.
 name: ci
 
@@ -8,6 +10,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -29,6 +32,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
+          # The patch number counts commits (tools/app-version.sh) and the release notes list them since the last tag.
+          fetch-depth: 0
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
@@ -62,6 +67,10 @@ jobs:
             wallet/native/target/bb-v5
             wallet/native/target/bb5-x86_64-unknown-linux-gnu
           key: bb-5.0.0-x86_64-linux-${{ hashFiles('wallet/native/zkpdf-prover/tools/build_bb.py', 'wallet/native/zkpdf-prover/tools/portable_x86_64.cmake') }}
+      # version.properties holds major.minor; the patch counts the commits since that line last changed, the rule
+      # build.gradle.kts applies. On a tag the tag must name this version.
+      - name: Version
+        run: bash tools/app-version.sh >> "$GITHUB_ENV"
       - name: Test and build the distributions
         run: ./gradlew --no-daemon --stacktrace test installDist distTar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -105,7 +114,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${GITHUB_REF_NAME}" build/distributions/*.tar --title "${GITHUB_REF_NAME}" --generate-notes
+        run: |
+          python3 -I tools/release-notes.py --version "$APP_VERSION" --tag "$GITHUB_REF_NAME" > notes.md
+          gh release create "${GITHUB_REF_NAME}" build/distributions/*.tar --verify-tag --latest --title "diw-server $APP_VERSION" --notes-file notes.md
 
   native:
     # Experimental: a failure here never blocks the JVM build or its release.
@@ -117,6 +128,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
+          # The patch number counts commits (tools/app-version.sh) and the release notes list them since the last tag.
+          fetch-depth: 0
       # Tests run on Java 21 as in the build job; native-image comes from GraalVM 25 (21 fails on Kotlin coroutines).
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:

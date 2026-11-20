@@ -2,7 +2,8 @@
 # with Java 21 or later, and a GraalVM native executable for each system. Every build carries the native proof
 # library with UltraHonk (zkpdf) and Barretenberg 5 (bb5) for old zkPassport circuits; the jar carries all four
 # platforms. On every system the jar and the executable start the prover and must answer /healthz, which needs the
-# library loaded. A v* tag attaches them to the release the ci workflow creates.
+# library loaded. A v* tag attaches them to the release the ci workflow creates; the Stable release workflow starts
+# this workflow on the tag with workflow_dispatch when it pushed the tag with the workflow token.
 name: prover
 
 on:
@@ -122,6 +123,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
+          # The version counts commits (tools/app-version.sh).
+          fetch-depth: 0
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
@@ -141,8 +144,8 @@ jobs:
       - name: Build the jar
         run: |
           ./gradlew --no-daemon --stacktrace uberJar
-          version=$(cat version.txt)
-          [ "${GITHUB_REF_TYPE}" != tag ] || version=${GITHUB_REF_NAME#v}
+          # version.properties and the commit count (tools/app-version.sh); on a tag it equals the tag.
+          version=$(bash tools/app-version.sh | sed 's/^APP_VERSION=//')
           mkdir -p dist
           cp build/libs/diw-server-*-all.jar "dist/diw-server-$version-all.jar"
           ls -l dist
@@ -182,6 +185,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
+          fetch-depth: 0
       # Tests and the wallet build run on Java 21; native-image comes from GraalVM 25 (21 fails on Kotlin coroutines).
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
@@ -245,8 +249,8 @@ jobs:
         run: bash smoke.sh 18090 "build/native/nativeCompile/diw-server${{ matrix.exe }}"
       - name: Package
         run: |
-          version=$(cat version.txt)
-          [ "${GITHUB_REF_TYPE}" != tag ] || version=${GITHUB_REF_NAME#v}
+          # version.properties and the commit count (tools/app-version.sh); on a tag it equals the tag.
+          version=$(bash tools/app-version.sh | sed 's/^APP_VERSION=//')
           name=diw-server-$version-${{ matrix.platform }}
           mkdir -p "pkg/$name" out
           cp "build/native/nativeCompile/diw-server${{ matrix.exe }}" README.md LICENSE "pkg/$name/"
