@@ -9,16 +9,19 @@
 # signed and their .sha256 entries rewritten, since ZkNative checks each library against its entry.
 # The prover workflow attaches both files some minutes after the release is created; run this once they are there.
 #
-# Needs signtool (Windows SDK) and the GitHub CLI (gh auth login). With a YubiKey, the YubiKey Smart Card Minidriver
-# puts the certificate into Cert:\CurrentUser\My while the key is inserted; Windows asks for the PIV PIN when signing.
+# Signs with signtool (Windows SDK) and a certificate in Cert:\CurrentUser\My (with a YubiKey, the YubiKey Smart Card
+# Minidriver puts it there while the key is inserted; Windows asks for the PIV PIN when signing), or with your own
+# command (-SignCommand, for example a jsign script). Needs the GitHub CLI (gh auth login).
 #
 #   .\tools\windows-sign.ps1 -Tag v0.5.3
+#   .\tools\windows-sign.ps1 -Tag v0.5.3 -SignCommand C:\tools\jsign-yubikey.cmd,"{file}"
 #   .\tools\windows-sign.ps1 -Tag v0.5.3 -Thumbprint 0123ABCD... -NoUpload
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string]$Tag,
     [string]$Repo = "mctea01/diw-wallet-server",
     [string]$Thumbprint,
+    [string[]]$SignCommand,
     [string]$TimestampUrl = "http://timestamp.digicert.com",
     [string]$WorkDir = (Join-Path $env:TEMP "diw-server-sign"),
     [switch]$NoUpload,
@@ -37,35 +40,57 @@ function Invoke-Checked([string]$exe, [string[]]$arguments) {
     if ($LASTEXITCODE -ne 0) { throw "$([IO.Path]::GetFileName($exe)) failed with exit code $LASTEXITCODE" }
 }
 
-$signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
-if (-not $signtool) {
-    foreach ($root in @("${env:ProgramFiles(x86)}\Windows Kits\10\bin", "$env:ProgramFiles\Windows Kits\10\bin")) {
-        if (-not $signtool -and (Test-Path $root)) {
-            $signtool = Get-ChildItem $root -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+# -SignCommand: your own signing command (jsign, a wrapper script around it, another signer) instead of signtool and
+# the certificate store. The first element is the program, the rest its arguments; {file} in an argument becomes the
+# file to sign, and the file is appended when no argument has {file}. The command signs the file in place (with its
+# own timestamp) and exits with 0; -Thumbprint and -TimestampUrl apply to signtool only.
+if ($SignCommand) {
+    # Only the program: its arguments may hold a PIN or a password.
+    Write-Host "Signing with the custom command $($SignCommand[0])"
+} else {
+    $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+    if (-not $signtool) {
+        foreach ($root in @("${env:ProgramFiles(x86)}\Windows Kits\10\bin", "$env:ProgramFiles\Windows Kits\10\bin")) {
+            if (-not $signtool -and (Test-Path $root)) {
+                $signtool = Get-ChildItem $root -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+                    Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            }
         }
     }
-}
-if (-not $signtool) { throw "signtool.exe not found: install the Windows SDK (Signing Tools for Desktop Apps)" }
+    if (-not $signtool) { throw "signtool.exe not found: install the Windows SDK (Signing Tools for Desktop Apps)" }
 
-if ($Thumbprint) {
-    $Thumbprint = ($Thumbprint -replace "\s", "").ToUpperInvariant()
-    $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $Thumbprint }
-    if (-not $cert) { throw "No certificate $Thumbprint in Cert:\CurrentUser\My (is the YubiKey inserted?)" }
-} else {
-    $certs = @(Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) })
-    if ($certs.Count -ne 1) {
-        $certs | ForEach-Object { Write-Host ("  {0}  {1}  until {2:yyyy-MM-dd}" -f $_.Thumbprint, $_.Subject, $_.NotAfter) }
-        throw "Found $($certs.Count) usable code signing certificates: pass -Thumbprint"
+    if ($Thumbprint) {
+        $Thumbprint = ($Thumbprint -replace "\s", "").ToUpperInvariant()
+        $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $Thumbprint }
+        if (-not $cert) { throw "No certificate $Thumbprint in Cert:\CurrentUser\My (is the YubiKey inserted?)" }
+    } else {
+        $certs = @(Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) })
+        if ($certs.Count -ne 1) {
+            $certs | ForEach-Object { Write-Host ("  {0}  {1}  until {2:yyyy-MM-dd}" -f $_.Thumbprint, $_.Subject, $_.NotAfter) }
+            throw "Found $($certs.Count) usable code signing certificates: pass -Thumbprint"
+        }
+        $cert = $certs[0]
     }
-    $cert = $certs[0]
+    Write-Host "Signing with $($cert.Subject) ($($cert.Thumbprint)), valid until $($cert.NotAfter.ToString('yyyy-MM-dd'))"
 }
-Write-Host "Signing with $($cert.Subject) ($($cert.Thumbprint)), valid until $($cert.NotAfter.ToString('yyyy-MM-dd'))"
+$Signer = $null
 
 function Sign-File([string]$path) {
-    Invoke-Checked $signtool @("sign", "/sha1", $cert.Thumbprint, "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256",
-        "/d", "diw-server", $path)
-    Invoke-Checked $signtool @("verify", "/pa", $path)
+    if ($SignCommand) {
+        $arguments = @($SignCommand | Select-Object -Skip 1 | ForEach-Object { $_.Replace("{file}", $path) })
+        if (-not ($SignCommand | Where-Object { $_.Contains("{file}") })) { $arguments += $path }
+        Invoke-Checked $SignCommand[0] $arguments
+    } else {
+        Invoke-Checked $signtool @("sign", "/sha1", $cert.Thumbprint, "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256",
+            "/d", "diw-server", $path)
+    }
+    # Whatever signed it, the file must now carry an Authenticode signature over its current content.
+    $signature = Get-AuthenticodeSignature $path
+    if (-not $signature.SignerCertificate -or $signature.Status -in @("NotSigned", "HashMismatch", "NotSupportedFileFormat")) {
+        throw "$path has no valid signature after signing ($($signature.Status))"
+    }
+    if ($signature.Status -ne "Valid") { Write-Warning "$([IO.Path]::GetFileName($path)): $($signature.Status), $($signature.StatusMessage)" }
+    $script:Signer = $signature.SignerCertificate
 }
 
 if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
@@ -129,7 +154,7 @@ Write-Host "Replaced in release ${Tag}: $(($uploads | ForEach-Object { [IO.Path]
 if (-not $NoNotes) {
     $body = (& gh release view $Tag --repo $Repo --json body --jq .body | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "gh release view failed" }
-    $subject = $cert.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+    $subject = $Signer.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
     $what = "Windows 原生證明器與 jar 內的 Windows 原生程式庫"
     $line = "$what 已以 $subject 的程式碼簽章憑證簽署（Authenticode）。"
     $marker = "每個檔案的 SHA-256 列在本頁最下方的檔案清單。"
