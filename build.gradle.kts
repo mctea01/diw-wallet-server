@@ -28,15 +28,22 @@ fun git(vararg args: String): String? = try {
     null
 }
 val inCi: Boolean = providers.environmentVariable("GITHUB_ACTIONS").orNull == "true"
+val gitRef: String? = providers.environmentVariable("GITHUB_REF").orNull
+val pullRequest: String? = gitRef?.let { Regex("refs/pull/(\\d+)/.*").matchEntire(it)?.groupValues?.get(1) }
+/** On a release tag v<line>.<patch> of this line, the tag names the patch (tools/app-version.sh checks it). */
+val tagPatch: Int? = gitRef?.let { Regex("refs/tags/v${Regex.escape(releaseLine)}\\.(\\d+)").matchEntire(it) }
+    ?.groupValues?.get(1)?.toIntOrNull()
 val patch: Int by lazy {
     val counted = if (git("rev-parse", "--is-shallow-repository") != "false") null
     else git("log", "-G^version=", "-1", "--format=%H", "--", "version.properties")
         ?.let { base -> git("rev-list", "--count", "$base..HEAD") }?.toIntOrNull()
-    if (counted == null) logger.warn("Version: no full git history, patch 0 (check out with fetch-depth: 0)")
-    counted ?: 0
+    if (counted != null && tagPatch != null && counted != tagPatch) {
+        throw GradleException("Tag ${gitRef?.removePrefix("refs/tags/")} does not match the version $releaseLine.$counted of this commit")
+    }
+    // A shallow checkout cannot count commits: a release tag still names the right version, other builds use 0.
+    if (counted == null && tagPatch == null) logger.warn("Version: no full git history, patch 0 (check out with fetch-depth: 0)")
+    counted ?: tagPatch ?: 0
 }
-val pullRequest: String? = providers.environmentVariable("GITHUB_REF").orNull
-    ?.let { Regex("refs/pull/(\\d+)/.*").matchEntire(it)?.groupValues?.get(1) }
 version = (findProperty("diw.version") as String?)
     ?: ("$releaseLine.$patch" + when { !inCi -> "-dev"; pullRequest != null -> "-pr$pullRequest"; else -> "" })
 
