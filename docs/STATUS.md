@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-20（版本改由 version.properties 管理並升到 0.5、穩定版發佈 workflow 與 Release 頁下載指引；main 到 PR #43）。
+最後更新：2026-11-20（版本改由 version.properties 管理並升到 0.5、穩定版發佈 workflow 與 Release 頁下載指引、Windows 本機簽章腳本；main 到 PR #44）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -8,7 +8,7 @@
 
 ## 1. 一眼看完
 
-- 版本線 `0.5`（[version.properties](../version.properties)，與錢包相同的規則：修訂號是之後的 commit 數）。上一個標籤是 `v0.4.1`（2026-11-15，當時發行檔仍叫 `diw-server-0.1.0.tar`）；之後的穩定版由 `Stable release` workflow 發佈，發行檔名與標籤一致，見 [fork-setup.md](fork-setup.md) 第 3 節。新的 workflow 檔待使用者貼上。
+- 版本線 `0.5`（[version.properties](../version.properties)，與錢包相同的規則：修訂號是之後的 commit 數）。上一個標籤是 `v0.4.1`（2026-11-15，當時發行檔仍叫 `diw-server-0.1.0.tar`）；之後的穩定版由 `Stable release` workflow 發佈，發行檔名與標籤一致，見 [fork-setup.md](fork-setup.md) 第 3 節；workflow 已在 main，還沒有發過 0.5 的穩定版。
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）；OpenID4VP 轉送信箱在錢包 P5 的 PR 中（見第 4 節）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
@@ -45,7 +45,8 @@
 | Google Cloud Run | `deploy/cloudrun/service.yaml` | 檔案與文件齊備 |
 | Cloudflare Containers | `deploy/cloudflare` | 檔案與文件齊備 |
 | 臨時證明器下載（jar 與各系統的原生版） | `.github/workflows/prover.yml` | workflow 已在 main；推標籤時附加到 Release，也可手動執行取得 Artifact |
-| 穩定版發佈 | `tools/stable-release.sh`、`tools/release-notes.py`、`.github/workflows/stable-release.yml` | 腳本在 main；`stable-release.yml` 與改過的 `docker-image.yml`、`prover.yml` 待使用者貼上；換版本線需要 secret `RELEASE_TOKEN` |
+| 穩定版發佈 | `tools/stable-release.sh`、`tools/release-notes.py`、`.github/workflows/stable-release.yml` | 腳本與 workflow 都在 main，尚未實際發佈；換版本線需要 secret `RELEASE_TOKEN` |
+| Windows 程式碼簽章 | `tools/windows-sign.ps1` | 在本機以 YubiKey 簽署 Release 的 Windows 原生證明器與 jar 內的 Windows 原生程式庫並傳回；尚未在 Windows 實際執行過 |
 
 所有方式讀同一份 `server.conf`（`deploy/server.conf.example` 由程式產生，測試會比對）。CI 在每次推送與 PR 執行測試，`v*` 標籤時才發佈映像與 Release；Release 內文最上方列出各部署方式該用的檔案，下面是變更。
 

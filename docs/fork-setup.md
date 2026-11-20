@@ -49,6 +49,21 @@ Release 頁的內文由 `tools/release-notes.py` 產生：最上方一次列出�
 - `prover` workflow 把臨時證明器的 jar 與各系統的原生版附加到同一個 Release；也可以在 Actions 頁手動執行，只產生 Artifact。
 - Agent 不能推送 `.github/workflows/`，workflow 的修改要由有權限的人貼上。
 
+### Windows 程式碼簽章
+
+CI 產生的 Windows 檔案沒有 Authenticode 簽章。程式碼簽章憑證只存在 YubiKey（或其他智慧卡）時，等 `prover` workflow 把檔案附加到 Release 之後，在自己的 Windows 電腦上執行（先 `chcp 65001`）：
+
+```powershell
+.\tools\windows-sign.ps1 -Tag v0.5.3
+```
+
+- `diw-server-<版本>-windows-x86_64.zip`：簽署 `diw-server.exe` 後以相同的資料夾結構重新打包。零知識程式庫是編進執行檔的資源，事後無法個別簽章；執行檔只在它的 SHA-256 與執行檔內釘選的值相同時才解出載入。
+- `diw-server-<版本>-all.jar`：簽署其中的 `zk/native/windows-x86_64/` 程式庫並改寫對應的 `.sha256`（`ZkNative` 解出時核對它）。
+- 兩個檔案以 `--clobber` 取代同名檔案，GitHub 的檔案清單隨即顯示新的 SHA-256；Release 內文的下載指引之後加一行說明（`-NoNotes` 不加，`-NoUpload` 只在本機產生）。
+- 需要 Windows SDK 的 `signtool`、YubiKey Smart Card Minidriver（簽署時 Windows 詢問 PIV PIN）與已登入的 GitHub CLI；有多張程式碼簽章憑證時以 `-Thumbprint` 指定。
+- 不用 signtool 時以 `-SignCommand` 改用自己的簽章命令，例如 `-SignCommand C:\tools\jsign-yubikey.cmd,"{file}"`：第一個元素是程式，其餘是參數，`{file}` 換成要簽的檔案（沒有時接在最後）；命令就地簽署並以 0 結束，時戳由命令自己處理，腳本之後確認檔案帶有 Authenticode 簽章。
+- 容器映像與 Linux、macOS 的檔案不在範圍內。
+
 ## 4. 每台服務端自己的金鑰與設定
 
 這些不屬於 repo，每個部署各自產生，放在 `server.conf` 或平台的 secret，不要提交：
