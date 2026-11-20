@@ -12,7 +12,7 @@
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）；OpenID4VP 轉送信箱在錢包 P5 的 PR 中（見第 4 節）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
-- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #150 合併後更新）。
+- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #153 合併後更新：zkPassport 憑證包的 UIDAI 憑證計入憑證樹，2026-11-16 起的憑證包才能通過樹根檢查；揭露日期以 ISO 日期放進查詢結果）。
 - 原生證明程式庫只在 `zktls`、`oprf`、`zkpassport`、`bonds_age_verify` 啟用時載入。Linux 另附相容版（不含 Barretenberg、glibc 2.28、任何 x86_64 CPU），完整版因 CPU 或 glibc 不能用時自動改用；`diw-server native-check` 顯示結果與原因。
 
 ## 2. 功能狀態
@@ -28,7 +28,7 @@
 | 行動自然人憑證簽署 `/twfido/sign` | `twfido` | 可用；沒有以真實 SP 帳號驗收 | `TwFidoHostTest`（本機模擬的內政部服務） | 需要內政部核發的 SP 帳號 |
 | 信任聯盟（OpenID Federation 1.0） | `federation` | 可用 | `FederationTest` | 可當下級，也可當上級 |
 | 本專案 OPRF `/oprf/v1/*` | `oprf` | 可用 | `OprfHostTest` | 需要含 `oprf` 的原生程式庫 |
-| 自己的 zkPassport 證明器 `/zkpassport/v1/jobs` | `zkpassport` | 可用 | `ZkPassportHostTest`、`ZkPassportClientInteropTest` | 需要含 `zkpdf` 的原生程式庫；1 GB 主機可能不夠；本專案 FaceMatch（手機比對並簽署後轉送）的金鑰證明版要等錢包 release `zkpassport-facematch-v1` 發佈 |
+| 自己的 zkPassport 證明器 `/zkpassport/v1/jobs` | `zkpassport` | 可用 | `ZkPassportHostTest`、`ZkPassportClientInteropTest` | 需要含 `zkpdf` 的原生程式庫；1 GB 主機可能不夠；本專案 FaceMatch（手機比對並簽署後轉送）的金鑰證明版電路由錢包 release `zkpassport-facematch-v1` 提供（2026-11-15 已發佈） |
 | OpenID4VP 轉送信箱 `/oid4vp/v1/*` | `oid4vp` | 可用 | `Oid4vpMailboxTest`（以錢包 core 的用戶端對路由） | 手機查驗方的線上查驗；只轉存加密回應 |
 | 臨時證明器 `diw-server prover` | 指令 | 可用 | `ZkPassportPairingTest` | 內網限定、一次性 QR 配對 |
 | 健康檢查與版本資訊 `/healthz`、`/info` | 固定 | 可用 | `ServerTest`、`ConfigTest` | |
