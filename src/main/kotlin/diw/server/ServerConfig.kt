@@ -48,6 +48,8 @@ data class ServerConfig(
     val listenPort: Int = 8080,
     val features: Set<String> = setOf(FEATURE_RELAY),
     val dataDir: File = File("/var/lib/diw-server"),
+    /** A diw_zk library to load instead of the bundled ones; only features that need proofs load any. */
+    val nativeLibrary: File? = null,
     val relay: RelayLimits = RelayLimits(),
     val bondsAge: BondsAgeLimits = BondsAgeLimits(),
     /** Verify Bonds age proofs here (needs the native library and about 450 MB of verifying keys); otherwise relay only. */
@@ -131,6 +133,7 @@ data class ServerConfig(
             "listen_port" to listenPort.toString(),
             "data_dir" to dataDir.path,
             "trust_forwarded" to trustForwarded.toString(),
+            "native_library" to nativeLibrary?.path,
             "relay_max_rooms" to relay.maxRooms.toString(),
             "relay_lifetime_minutes" to relay.lifetime.inWholeMinutes.toString(),
             "relay_max_mb" to (relay.maxBytes shr 20).toString(),
@@ -368,6 +371,7 @@ data class ServerConfig(
                 listenPort = int("listen_port", 8080, 1..65535),
                 features = features,
                 dataDir = File(str("data_dir") ?: "/var/lib/diw-server"),
+                nativeLibrary = str("native_library")?.let { File(it) }?.also { require(it.isFile) { "native_library not found: ${it.path}" } },
                 relay = RelayLimits(
                     maxRooms = int("relay_max_rooms", 64, 1..10_000),
                     lifetime = int("relay_lifetime_minutes", 15, 1..120).minutes,

@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-19（main 到 PR #38，加上錢包 P5 線上查驗用的 OpenID4VP 轉送信箱；錢包 PR #152 已合併，submodule 指向錢包 main）。
+最後更新：2026-11-19（main 到 PR #42，加上原生證明程式庫的拆分與相容版）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -8,11 +8,12 @@
 
 ## 1. 一眼看完
 
-- 版本 `0.1.0`（[version.txt](../version.txt)）。還沒有推送 `v*` 標籤，所以 ghcr.io 上沒有正式映像，也沒有 Release；要部署得先推標籤或自行建置。
+- 版本 `0.1.0`（[version.txt](../version.txt)）。已推送標籤 `v0.4.1`（2026-11-15），Release 與映像由它產生；`version.txt` 沒有跟著改，所以發行檔仍叫 `diw-server-0.1.0.tar`。
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）；OpenID4VP 轉送信箱在錢包 P5 的 PR 中（見第 4 節）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
-- 錢包以 git submodule 釘選在 `wallet/`。main 釘的是錢包 main 上的 commit（錢包 PR #152 合併後更新）。
+- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #150 合併後更新）。
+- 原生證明程式庫只在 `zktls`、`oprf`、`zkpassport`、`bonds_age_verify` 啟用時載入。Linux 另附相容版（不含 Barretenberg、glibc 2.28、任何 x86_64 CPU），完整版因 CPU 或 glibc 不能用時自動改用；`diw-server native-check` 顯示結果與原因。
 
 ## 2. 功能狀態
 
@@ -31,6 +32,7 @@
 | OpenID4VP 轉送信箱 `/oid4vp/v1/*` | `oid4vp` | 可用 | `Oid4vpMailboxTest`（以錢包 core 的用戶端對路由） | 手機查驗方的線上查驗；只轉存加密回應 |
 | 臨時證明器 `diw-server prover` | 指令 | 可用 | `ZkPassportPairingTest` | 內網限定、一次性 QR 配對 |
 | 健康檢查與版本資訊 `/healthz`、`/info` | 固定 | 可用 | `ServerTest`、`ConfigTest` | |
+| 原生程式庫按需載入與 Linux 相容版 | `native_library` | 可用；在 Debian 10、11、12 與 Ubuntu 22.04 容器實測改用相容版並載入 TLSNotary，zkTLS 端對端測試以相容版通過；沒有在不支援 x86-64-v2 的實體 CPU 上驗證 | `ServerTest`、`ZkTlsHostTest` | 相容版沒有 zkPDF 與 zkPassport；完整版需要 glibc 2.38 與 libstdc++ 13 |
 | GraalVM 原生執行檔與 `-native` 映像 | | 實驗 | zkTLS 端對端測試可改對原生執行檔執行 | JVM 版仍是預設 |
 | zkPDF 證明器（S4） | | 未做 | | 錢包的「送到自架主機產生」目前用錢包 repo 的 `tools/zk-prover-server` |
 
@@ -39,7 +41,7 @@
 | 方式 | 檔案 | 狀態 |
 |---|---|---|
 | 容器（compose 加 Caddy） | `compose.yaml`、`Dockerfile`、`deploy/caddy` | 檔案與文件齊備；映像只有 amd64 |
-| 不用容器（systemd） | `deploy/systemd`、Release 的 tar（附 jlink 執行環境，x86_64 Linux） | 檔案與文件齊備 |
+| 不用容器（systemd） | `deploy/systemd`、Release 的 tar（附 jlink 執行環境，x86_64 Linux，glibc 2.28 以上） | 檔案與文件齊備；原生執行檔需要 glibc 2.34 以上 |
 | Google Cloud Run | `deploy/cloudrun/service.yaml` | 檔案與文件齊備 |
 | Cloudflare Containers | `deploy/cloudflare` | 檔案與文件齊備 |
 | 臨時證明器下載（jar 與各系統的原生版） | `.github/workflows/prover.yml` | workflow 已在 main；推標籤時附加到 Release，也可手動執行取得 Artifact |
@@ -52,7 +54,9 @@
 
 - S4 zkPDF 證明器。
 - 待合併的相依更新：GraalVM 建置外掛（PR #29）、兩個 GitHub Action 的 digest（PR #31、#32）。
-- 第一個 `v*` 標籤與 Release。
+- `version.txt` 與標籤版本一致（目前發行檔名仍是 0.1.0）。
+- 完整版 Linux 程式庫改以 Zig 與靜態 libc++ 建置（錢包 `DIW_ZK_LINUX_LIBCXX=1`），讓 zkPassport 等完整功能也能在舊系統使用；預設尚未開啟，見錢包 STATUS。
+- GraalVM 原生執行檔的 glibc 下限（2.34）沒有降低；舊系統請用 JVM 版。
 - OpenID4VP 轉送信箱：新增路由後的 GraalVM 原生中繼資料（`tools/native-metadata.sh`，需 GraalVM 21）尚未重新產生，原生執行檔版可能缺少這組路由用到的反射設定。
 
 待實機驗收（由部署的人執行，沒有紀錄）：
@@ -64,6 +68,7 @@
 - 自己的 zkPassport 證明器與臨時證明器搭配實體護照與手機，含 FaceMatch 的真實金鑰證明憑證鏈。
 - 兩台手機透過 OpenID4VP 轉送信箱完成線上查驗。
 - 臨時證明器在真正的 Windows、macOS 與 Linux ARM64 上執行。
+- 相容版程式庫在使用者 1 GB VPS（以 `diw-server native-check` 確認）與不支援 x86-64-v2 的 CPU 上執行。
 
 ## 5. 外部條件
 
@@ -78,6 +83,7 @@
 | Kotlin、Ktor（CIO）、coroutines、serialization | 2.4.21、3.6.1、1.11.0、1.12.0 |
 | JDK | 21（jlink 執行環境）；原生執行檔用 GraalVM Community 25 |
 | 錢包 `core` 與原生程式庫 | submodule `wallet/` 釘選的 commit |
-| CI 建置的原生功能 | 映像：`openac,tlsn,oprf,zkpdf,bb5`；臨時證明器：`zkpdf,bb5` |
+| CI 建置的原生功能 | 映像：`openac,tlsn,oprf,zkpdf,bb5`；臨時證明器：`zkpdf,bb5`；Linux 相容版去掉 `zkpdf,bb5`（保留 `oprf`） |
+| Linux 相容版的建置工具 | Zig 0.14.1（錢包 `zkpdf-prover/tools/zig.py` 釘選雜湊）、cargo-zigbuild 0.20.1 |
 
 版本以 `gradle/libs.versions.toml` 與 submodule 指標為準；升級由 Renovate 開 PR。

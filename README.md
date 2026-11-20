@@ -69,7 +69,7 @@ docker compose up -d
 
 ### 方式二：不用容器（systemd）
 
-1. 安裝 [Caddy](https://caddyserver.com/docs/install)。不需要另外安裝 Java：Release 的 `diw-server-<版本>.tar` 附精簡的 Java 執行環境（`runtime/`）。只有 x86_64 Linux 主機可用。
+1. 安裝 [Caddy](https://caddyserver.com/docs/install)。不需要另外安裝 Java：Release 的 `diw-server-<版本>.tar` 附精簡的 Java 執行環境（`runtime/`）。只有 x86_64 Linux 主機可用；glibc 2.28 以上的系統都能執行，原生證明程式庫的需求見下方「小型或較舊的主機」。
 2. 解壓到 `/opt/diw-server`：
    ```sh
    mkdir -p /opt/diw-server
@@ -184,9 +184,24 @@ java -jar diw-server-<版本>-all.jar prover   # jar 版
 - Windows Terminal（Windows 11 預設）會直接畫出 QR Code；傳統主控台改把 QR Code 存成資料目錄中的 `pairing-code.svg` 並印出路徑，用瀏覽器開啟後掃描，程式結束時刪除。
 - 啟動後會下載約 130 MB 的 CRS 到 `DIW_DATA_DIR`（預設 `~/.diw-server`），之後沿用；證明時的記憶體高峰視護照簽章演算法而定，RSA 約 1 GB，P-521 等可到 2 GB。
 
+### 小型或較舊的主機（原生證明程式庫）
+
+只有 `zktls`、`oprf`、`zkpassport` 與 `bonds_age_verify=true` 會載入原生證明程式庫；只開 `relay`、`verifier`、`twfido`、`federation` 時完全不載入，任何 x86_64 Linux 都能跑。需要時依序嘗試：
+
+| 程式庫 | 內容 | 需求 |
+| --- | --- | --- |
+| 完整版 `linux-x86_64` | 全部後端（含 zkPDF、zkPassport 的 Barretenberg） | glibc 2.38 與 libstdc++ 13 以上（Ubuntu 24.04、Debian 13），CPU 支援 x86-64-v2（SSE4.2、POPCNT） |
+| 相容版 `linux-x86_64-compat` | TLSNotary、OPRF、OpenAC；沒有 zkPDF 與 zkPassport | glibc 2.28 以上（Debian 10、Ubuntu 20.04、RHEL 8），任何 x86_64 CPU，不需 C++ 執行環境 |
+
+- CPU 不支援 x86-64-v2 時不會開啟完整版（否則程序會因非法指令結束），直接改用相容版；glibc 或 libstdc++ 太舊時完整版開不起來，也會改用相容版。
+- `diw-server native-check` 不需設定檔，印出實際載入哪一版、有哪些後端，以及其他版本不能用的原因。`/info` 的 `nativeVariant` 也會顯示載入的版本。
+- 另外自建或下載的程式庫可用 `DIW_NATIVE_LIBRARY=/路徑/libdiw_zk.so` 指定，取代內附的版本。
+- 容器映像以 Ubuntu 24.04 為底，主機的 glibc 版本不影響映像內的完整版；CPU 的限制仍然適用。
+- 1 GB 主機適合用相容版跑 zkTLS 查驗主機與 OPRF；zkPassport 證明需要約 1 至 2 GB 記憶體，不建議放在同一台。
+
 ### 原生執行檔（實驗）
 
-CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-server-<版本>-native`（x86_64 Linux）與映像 `ghcr.io/mctea01/diw-wallet-server:<版本>-native`。功能、設定、資料目錄與指令都和 JVM 版相同，只換掉執行方式：
+CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-server-<版本>-native`（x86_64 Linux，需要 glibc 2.34 以上，例如 Ubuntu 22.04、Debian 12；更舊的系統請用 JVM 版）與映像 `ghcr.io/mctea01/diw-wallet-server:<版本>-native`。功能、設定、資料目錄與指令都和 JVM 版相同，只換掉執行方式：
 
 - 實測（4 核心開發機，只開中繼）：從啟動到 `/healthz` 可回應約 0.17 秒，啟動後 RSS 約 79 MB；JVM 版加類別快取為 0.8 秒、103 MB。冷啟動計費的 Cloud Run、Cloudflare 與 1 GB 主機最有感。
 - zkTLS 查驗主機的原生程式庫（tlsn）同樣以 JNA 載入，端對端測試（持有人透過原生服務端完成網頁證明）通過。

@@ -53,6 +53,18 @@ class ServerTest {
     }
 
     @Test
+    fun onlyProvingFeaturesLoadTheNativeLibrary() {
+        // Relay, verifier, twfido, federation and relaying bonds-age never open it, whatever the host's CPU or libc.
+        val relayOnly = Server(config())
+        assertFalse(relayOnly.needsNative)
+        assertEquals(emptyList(), relayOnly.nativeBackends)
+        assertEquals(null, relayOnly.nativeVariant)
+        val relaying = config().copy(features = setOf(ServerConfig.FEATURE_RELAY, ServerConfig.FEATURE_BONDS_AGE))
+        assertFalse(Server(relaying).needsNative)
+        assertTrue(Server(relaying.copy(bondsAgeVerify = true)).needsNative)
+    }
+
+    @Test
     fun relayForwardsBothWaysAndForgetsTheRoom() = testApplication {
         val server = Server(config())
         start(server)

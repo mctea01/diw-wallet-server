@@ -59,6 +59,25 @@ private val log = LoggerFactory.getLogger("diw.server")
 /** Version from the jar manifest; "dev" when run from the build directory. */
 val serverVersion: String = ServerConfig::class.java.`package`?.implementationVersion ?: "dev"
 
+/** Features whose work runs in the native library. */
+private val NATIVE_FEATURES = setOf(ServerConfig.FEATURE_ZKTLS, ServerConfig.FEATURE_OPRF, ServerConfig.FEATURE_ZKPASSPORT)
+
+/**
+ * Loads the native library (the configured native_library, else the bundled variant that suits this host) and
+ * returns its backends; on failure logs each variant's reason and returns none.
+ */
+fun loadNative(config: ServerConfig): Set<ZkBackend> {
+    config.nativeLibrary?.let { System.setProperty(ZkNative.LIBRARY_PROPERTY, it.absolutePath) }
+    val directory = File(config.dataDir, "native").apply { mkdirs() }
+    val result = ZkNative.load(directory)
+    if (result !is ZkResult.Ok) {
+        log.warn("Native library not loaded: {}", ZkNative.loadFailure ?: "self test failed")
+        return emptySet()
+    }
+    log.info("Native library {} ({})", ZkNative.variant ?: "android", result.value.backends.map { it.name.lowercase() }.sorted())
+    return result.value.backends
+}
+
 /** What the server runs, built once from [config]. */
 class Server(
     val config: ServerConfig,
@@ -86,13 +105,20 @@ class Server(
 
     val relay: Relay? = if (ServerConfig.FEATURE_RELAY in config.features) Relay(config.relay) else null
 
-    private val native = run {
-        val directory = File(config.dataDir, "native").apply { mkdirs() }
-        (ZkNative.load(directory) as? ZkResult.Ok)?.value?.backends.orEmpty()
-    }
+    /**
+     * Whether an enabled feature proves or verifies with the native library. The others (relay, verifier, twfido,
+     * federation, bonds-age relaying) never load it, so they run on any host whatever its CPU or C library.
+     */
+    val needsNative: Boolean = config.features.any { it in NATIVE_FEATURES } ||
+        (ServerConfig.FEATURE_BONDS_AGE in config.features && config.bondsAgeVerify)
 
-    /** Native proof backends found at start, by name; empty when the library is absent (the relay needs none). */
+    private val native = if (!needsNative) emptySet() else loadNative(config)
+
+    /** Native proof backends found at start, by name; empty when the library is absent or not needed. */
     val nativeBackends: List<String> = native.map { it.name.lowercase() }.sorted()
+
+    /** The library variant that loaded (linux-x86_64, linux-x86_64-compat, external, ...); null when none did. */
+    val nativeVariant: String? = if (needsNative) ZkNative.variant else null
 
     /** The server-side age verifier, set once its two verifying keys are installed. */
     @Volatile private var nativeAgeVerifier: OpenAcAgeVerifier? = ageVerifier
@@ -292,6 +318,7 @@ fun Application.module(server: Server) {
                 put("publicUrl", server.config.publicUrl)
                 putJsonArray("features") { server.config.features.sorted().forEach { add(JsonPrimitive(it)) } }
                 putJsonArray("native") { server.nativeBackends.forEach { add(JsonPrimitive(it)) } }
+                server.nativeVariant?.let { put("nativeVariant", it) }
                 // The web verifier's DID, for registering it or recognising it on the holder's consent screen.
                 server.verifier?.let { put("verifierDid", it.did) }
                 // The root the wallet trusts after the user compares its SHA-256 (DESIGN 3.4).
@@ -340,8 +367,8 @@ fun Application.module(server: Server) {
     }
 }
 
-private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | oprf-keygen | config | " +
-    "config-template | federation-jwks | federation-enroll <entity_id> | prover [--port <port>] [--address <ip>]]"
+private const val USAGE = "usage: diw-server [keygen <file> <public_url> [verifier|federation] | hash-token | oprf-keygen | native-check | " +
+    "config | config-template | federation-jwks | federation-enroll <entity_id> | prover [--port <port>] [--address <ip>]]"
 
 internal fun fail(message: String): Nothing {
     System.err.println("diw-server: $message")
@@ -360,6 +387,8 @@ private fun loadConfig(): ServerConfig = try {
  *   verifier_key_pem, federation_key_pem);
  * - `hash-token` prints the SHA-256 of stdin's first line;
  * - `oprf-keygen` prints a new OPRF key for oprf_key and, with the native OPRF, its public half;
+ * - `native-check` loads the native library as a proving feature would and prints which variant runs, its
+ *   backends, and why the others cannot (exit status 1 when none loads); it needs no settings file;
  * - `config` prints the effective settings, where each came from (secrets hidden) and the settings digest that
  *   /info also reports, to compare deployments;
  * - `config-template` prints the settings file every deployment uses (deploy/server.conf.example);
@@ -411,6 +440,27 @@ private fun command(args: Array<String>): Boolean {
                 println("# public key: " + oprfPublicKey(key))
             } else {
                 System.err.println("diw-server: the native library has no OPRF; the public key shows at /oprf/v1/key once the server runs")
+            }
+        }
+        "native-check" -> {
+            // The settings file is optional here: only native_library matters, and DIW_NATIVE_LIBRARY works alone.
+            val config = runCatching { ServerConfig.load() }.getOrNull()
+            (config?.nativeLibrary?.path ?: System.getenv("DIW_NATIVE_LIBRARY")?.takeIf { it.isNotBlank() })?.let {
+                System.setProperty(ZkNative.LIBRARY_PROPERTY, File(it).absolutePath)
+            }
+            println("host: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
+            val directory = java.nio.file.Files.createTempDirectory("diw-server-native").toFile().apply { deleteOnExit() }
+            when (val result = ZkNative.load(directory)) {
+                is ZkResult.Ok -> {
+                    println("loaded: ${ZkNative.variant ?: "android"} (crate ${result.value.version})")
+                    println("backends: ${result.value.backends.map { it.name.lowercase() }.sorted().joinToString(", ").ifEmpty { "none" }}")
+                    println("features: ${nativeInfo().features.sorted().joinToString(", ")}")
+                }
+                else -> {
+                    println("loaded: none")
+                    println("reason: ${ZkNative.loadFailure ?: "self test failed"}")
+                    exitProcess(1)
+                }
             }
         }
         "config" -> {
