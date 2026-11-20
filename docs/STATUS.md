@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-20（版本改由 version.properties 管理並升到 0.5、穩定版發佈 workflow 與 Release 頁下載指引）。
+最後更新：2026-11-20（main 到 PR #41；原生執行檔加上 x86_64 指令集等級檢查，x86_64 Linux 原生工作改用 ubuntu-24.04；submodule 指向錢包 main，含 PR #154）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
