@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-19（main 到 PR #42，加上原生證明程式庫的拆分與相容版）。
+最後更新：2026-11-20（版本改由 version.properties 管理並升到 0.5、穩定版發佈 workflow 與 Release 頁下載指引）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -8,7 +8,7 @@
 
 ## 1. 一眼看完
 
-- 版本 `0.1.0`（[version.txt](../version.txt)）。已推送標籤 `v0.4.1`（2026-11-15），Release 與映像由它產生；`version.txt` 沒有跟著改，所以發行檔仍叫 `diw-server-0.1.0.tar`。
+- 版本線 `0.5`（[version.properties](../version.properties)，與錢包相同的規則：修訂號是之後的 commit 數）。上一個標籤是 `v0.4.1`（2026-11-15，當時發行檔仍叫 `diw-server-0.1.0.tar`）；之後的穩定版由 `Stable release` workflow 發佈，發行檔名與標籤一致，見 [fork-setup.md](fork-setup.md) 第 3 節。新的 workflow 檔待使用者貼上。
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）；OpenID4VP 轉送信箱在錢包 P5 的 PR 中（見第 4 節）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
@@ -45,8 +45,9 @@
 | Google Cloud Run | `deploy/cloudrun/service.yaml` | 檔案與文件齊備 |
 | Cloudflare Containers | `deploy/cloudflare` | 檔案與文件齊備 |
 | 臨時證明器下載（jar 與各系統的原生版） | `.github/workflows/prover.yml` | workflow 已在 main；推標籤時附加到 Release，也可手動執行取得 Artifact |
+| 穩定版發佈 | `tools/stable-release.sh`、`tools/release-notes.py`、`.github/workflows/stable-release.yml` | 腳本在 main；`stable-release.yml` 與改過的 `docker-image.yml`、`prover.yml` 待使用者貼上；換版本線需要 secret `RELEASE_TOKEN` |
 
-所有方式讀同一份 `server.conf`（`deploy/server.conf.example` 由程式產生，測試會比對）。CI 在每次推送與 PR 執行測試，推送 `v*` 標籤時才發佈映像與 Release。
+所有方式讀同一份 `server.conf`（`deploy/server.conf.example` 由程式產生，測試會比對）。CI 在每次推送與 PR 執行測試，`v*` 標籤時才發佈映像與 Release；Release 內文最上方列出各部署方式該用的檔案，下面是變更。
 
 ## 4. 未完成與待驗收
 
@@ -54,7 +55,7 @@
 
 - S4 zkPDF 證明器。
 - 待合併的相依更新：GraalVM 建置外掛（PR #29）、兩個 GitHub Action 的 digest（PR #31、#32）。
-- `version.txt` 與標籤版本一致（目前發行檔名仍是 0.1.0）。
+- 穩定版發佈 workflow 貼上後的第一次實際發佈（尚未執行過）。
 - 完整版 Linux 程式庫改以 Zig 與靜態 libc++ 建置（錢包 `DIW_ZK_LINUX_LIBCXX=1`），讓 zkPassport 等完整功能也能在舊系統使用；預設尚未開啟，見錢包 STATUS。
 - GraalVM 原生執行檔的 glibc 下限（2.34）沒有降低；舊系統請用 JVM 版。
 - OpenID4VP 轉送信箱：新增路由後的 GraalVM 原生中繼資料（`tools/native-metadata.sh`，需 GraalVM 21）尚未重新產生，原生執行檔版可能缺少這組路由用到的反射設定。

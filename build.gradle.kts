@@ -8,7 +8,37 @@ plugins {
 }
 
 group = "diw.server"
-version = providers.fileContents(layout.projectDirectory.file("version.txt")).asText.get().trim()
+/*
+ * One version for every output, by the wallet's rule. version.properties holds the release line (major.minor); the
+ * patch is the number of commits since the commit that last changed that line. A pull request build is marked
+ * -pr<N>, a build outside CI -dev. tools/app-version.sh applies the same rule for the CI file names and checks a v*
+ * tag against it. -Pdiw.version overrides (for a source tree without git history).
+ */
+val releaseLine: String = layout.projectDirectory.file("version.properties").asFile.readLines()
+    .firstNotNullOfOrNull { Regex("""\s*version\s*=\s*(\d+\.\d+)\s*""").matchEntire(it)?.groupValues?.get(1) }
+    ?: throw GradleException("version.properties needs a line version=<major>.<minor>")
+fun git(vararg args: String): String? = try {
+    val run = providers.exec {
+        commandLine("git", *args)
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }
+    if (run.result.get().exitValue == 0) run.standardOutput.asText.get().trim().ifEmpty { null } else null
+} catch (e: Exception) {
+    null
+}
+val inCi: Boolean = providers.environmentVariable("GITHUB_ACTIONS").orNull == "true"
+val patch: Int by lazy {
+    val counted = if (git("rev-parse", "--is-shallow-repository") != "false") null
+    else git("log", "-G^version=", "-1", "--format=%H", "--", "version.properties")
+        ?.let { base -> git("rev-list", "--count", "$base..HEAD") }?.toIntOrNull()
+    if (counted == null) logger.warn("Version: no full git history, patch 0 (check out with fetch-depth: 0)")
+    counted ?: 0
+}
+val pullRequest: String? = providers.environmentVariable("GITHUB_REF").orNull
+    ?.let { Regex("refs/pull/(\\d+)/.*").matchEntire(it)?.groupValues?.get(1) }
+version = (findProperty("diw.version") as String?)
+    ?: ("$releaseLine.$patch" + when { !inCi -> "-dev"; pullRequest != null -> "-pr$pullRequest"; else -> "" })
 
 kotlin {
     jvmToolchain(21)

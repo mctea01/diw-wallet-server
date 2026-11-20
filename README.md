@@ -2,7 +2,7 @@
 
 [DIW MY WALLET](https://github.com/mctea01/my-Bonds-fork-android) 的正式環境服務端。
 
-> 狀態：版本 0.1.0，功能都有自動測試，還沒有發佈過正式映像，也沒有實機部署的驗收紀錄。做到哪裡、還缺什麼見 [docs/STATUS.md](docs/STATUS.md)。
+> 狀態：版本線 0.5（與錢包的 P5 相同，[version.properties](version.properties)），功能都有自動測試，還沒有實機部署的驗收紀錄。下載與映像見[最新穩定版](https://github.com/mctea01/diw-wallet-server/releases/latest)，Release 頁最上方列出各部署方式該用的檔案。做到哪裡、還缺什麼見 [docs/STATUS.md](docs/STATUS.md)。
 
 | 想知道 | 讀這份 |
 |---|---|
@@ -61,7 +61,7 @@ cp deploy/server.conf.example server.conf   # 填入 DIW_PUBLIC_URL 與 DIW_ACME
 docker compose up -d
 ```
 
-- 映像由 CI 在推送 `v*` 標籤時發佈到 `ghcr.io/mctea01/diw-wallet-server`。目前還沒有發佈過標籤，見 [docs/STATUS.md](docs/STATUS.md)；在那之前要自行建置（見「開發」）。
+- 映像由 CI 在穩定版（`v*` 標籤）發佈時推到 `ghcr.io/mctea01/diw-wallet-server`，標籤為版本號與 `latest`；目前發佈過的版本見 [Releases](https://github.com/mctea01/diw-wallet-server/releases)。
 - 兩個容器都讀 `server.conf`：服務讀全部設定，Caddy 只用 `DIW_PUBLIC_URL` 與 `DIW_ACME_EMAIL`。服務的健康檢查通過後，Caddy 才會啟動。
 - 查看狀態：`docker compose ps`。查看紀錄：`docker compose logs`。更新：`docker compose pull && docker compose up -d`。
 - 啟用 zkTLS 查驗主機：在 `server.conf` 設 `DIW_FEATURES=relay,zktls,bonds-age`，執行 `docker compose run --rm server hash-token` 輸入自訂的權杖（至少 16 字元），把印出的值填進 `DIW_ZKTLS_TOKEN_SHA256`，再 `docker compose up -d`。簽章金鑰會自動產生在 `server-data` volume，請備份其中的 `signing.pem`（`docker compose cp server:/var/lib/diw-server/signing.pem .`）。
@@ -267,7 +267,7 @@ docker build -f Dockerfile.native -t diw-wallet-server:native .
 - 新增或修改設定時改 `ConfigKeys.kt`，再以 `diw-server config-template > deploy/server.conf.example` 重新產生範本；測試會比對兩者。
 
 - 升級錢包版本：在 `wallet/` checkout 新的 commit，提交 submodule 指標的變更，並確認 CI 通過。
-- CI 在 [.github/workflows/docker-image.yml](.github/workflows/docker-image.yml)：每次推送與 PR 執行測試，推送 `v*` 標籤時發佈映像與 Release。Agent 無法推送 workflow 檔，修改需由有權限的人貼上。
+- CI 在 [.github/workflows/docker-image.yml](.github/workflows/docker-image.yml)：每次推送與 PR 執行測試，`v*` 標籤時發佈映像與 Release。穩定版用手動的 `Stable release` workflow 發佈，見 [docs/fork-setup.md](docs/fork-setup.md) 的「發佈」。Agent 無法推送 workflow 檔，修改需由有權限的人貼上。
 
 ## 授權
 
