@@ -1,3 +1,6 @@
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.zip.ZipFile
 
 plugins {
@@ -193,6 +196,62 @@ tasks.test {
 
 // GraalVM native image (experimental; the JVM distribution stays the default). `./gradlew nativeCompile` with
 // GRAALVM_HOME set writes build/native/nativeCompile/diw-server. The reachability metadata under
+/**
+ * The x86 ISA levels the GNU property note of an ELF64 executable asks the loader for (bit 0 baseline, then v2, v3,
+ * v4); 0 when it has none. glibc refuses to start the file on a processor below that ("CPU ISA level is lower than
+ * required").
+ */
+fun x86IsaNeeded(file: File): Int = RandomAccessFile(file, "r").use { f ->
+    fun read(at: Long, size: Int) = ByteBuffer.wrap(ByteArray(size).also { f.seek(at); f.readFully(it) })
+        .order(ByteOrder.LITTLE_ENDIAN)
+    val header = read(0, 64)
+    require(header.getInt(0) == 0x464c457f && header.get(4) == 2.toByte()) { "not an ELF64 file: $file" }
+    val phoff = header.getLong(32)
+    val phentsize = header.getShort(54).toInt()
+    var needed = 0
+    for (i in 0 until header.getShort(56).toInt()) {
+        val segment = read(phoff + i.toLong() * phentsize, phentsize)
+        if (segment.getInt(0) != 0x6474e553) continue // PT_GNU_PROPERTY
+        val size = segment.getLong(32).toInt()
+        val notes = read(segment.getLong(8), size)
+        var at = 0
+        while (at + 12 <= size) {
+            val descSize = notes.getInt(at + 4)
+            val desc = at + 12 + ((notes.getInt(at) + 3) and 3.inv())
+            if (notes.getInt(at + 8) == 5) { // NT_GNU_PROPERTY_TYPE_0
+                var property = desc
+                while (property + 8 <= desc + descSize) {
+                    val dataSize = notes.getInt(property + 4)
+                    if (notes.getInt(property) == 0xc0008002.toInt()) needed = needed or notes.getInt(property + 8)
+                    property += 8 + ((dataSize + 7) and 7.inv())
+                }
+            }
+            at = desc + ((descSize + 7) and 7.inv())
+        }
+    }
+    needed
+}
+
+// native-image targets "compatibility", but the C start files it links come from the build host, and those of
+// Ubuntu's amd64v3 variant (GitHub's ubuntu-26.04 runners) mark the executable x86-64-v3, so older processors cannot
+// start it. Build the Linux x86_64 executable on a baseline host (ubuntu-24.04); this check fails the build otherwise.
+val checkNativeIsa by tasks.registering {
+    description = "Fails when the Linux x86_64 native executable asks for more than the baseline x86-64 ISA level."
+    val image = layout.buildDirectory.file("native/nativeCompile/diw-server")
+    onlyIf { bundlesRuntime && image.get().asFile.isFile }
+    doLast {
+        val needed = x86IsaNeeded(image.get().asFile)
+        val levels = listOf("x86-64-baseline", "x86-64-v2", "x86-64-v3", "x86-64-v4").filterIndexed { bit, _ ->
+            needed and (1 shl bit) != 0
+        }
+        check(needed and 1.inv() == 0) {
+            "native executable requires ${levels.joinToString(", ")}: build it on a host whose C runtime is baseline"
+        }
+        logger.lifecycle("native executable ISA level: ${levels.ifEmpty { listOf("unmarked") }.joinToString(", ")}")
+    }
+}
+tasks.matching { it.name == "nativeCompile" }.configureEach { finalizedBy(checkNativeIsa) }
+
 // src/main/resources/META-INF/native-image comes from the tracing agent over the tests (`./gradlew -Pagent test
 // metadataCopy`); refresh it when dependencies change. The native proof library is loaded through JNA as on the JVM.
 graalvmNative {

@@ -201,7 +201,7 @@ java -jar diw-server-<版本>-all.jar prover   # jar 版
 
 ### 原生執行檔（實驗）
 
-CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-server-<版本>-native`（x86_64 Linux，需要 glibc 2.34 以上，例如 Ubuntu 22.04、Debian 12；更舊的系統請用 JVM 版）與映像 `ghcr.io/mctea01/diw-wallet-server:<版本>-native`。功能、設定、資料目錄與指令都和 JVM 版相同，只換掉執行方式：
+CI 另外以 GraalVM native-image 建出原生執行檔：Release 的 `diw-server-<版本>-native`（x86_64 Linux，需要 glibc 2.34 以上，例如 Ubuntu 22.04、Debian 12，任何 x86_64 CPU；更舊的系統請用 JVM 版。啟動時出現「CPU ISA level is lower than required」表示執行檔在 amd64v3 主機上建置，建置的 `checkNativeIsa` 會擋下這種檔案）與映像 `ghcr.io/mctea01/diw-wallet-server:<版本>-native`。功能、設定、資料目錄與指令都和 JVM 版相同，只換掉執行方式：
 
 - 實測（4 核心開發機，只開中繼）：從啟動到 `/healthz` 可回應約 0.17 秒，啟動後 RSS 約 79 MB；JVM 版加類別快取為 0.8 秒、103 MB。冷啟動計費的 Cloud Run、Cloudflare 與 1 GB 主機最有感。
 - zkTLS 查驗主機的原生程式庫（tlsn）同樣以 JNA 載入，端對端測試（持有人透過原生服務端完成網頁證明）通過。
