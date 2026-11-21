@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-21（原生執行檔建置加入 `--enable-native-access=ALL-UNNAMED`，消除 JNA 的受限方法警告；JNA 的 libjnidispatch.so 改解到 data_dir/native，/tmp 掛載 noexec 時原生程式庫也能載入；main 到 PR #44）。
+最後更新：2026-11-21（原生執行檔建置加入 `--enable-native-access=ALL-UNNAMED`，消除 JNA 的受限方法警告；JNA 的 libjnidispatch.so 改解到 data_dir/native，/tmp 掛載 noexec 時原生程式庫也能載入；中繼對超過讀取上限的訊框改報「Room limit」；說明線上查驗轉送要另開 `oid4vp`；main 到 PR #47）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
