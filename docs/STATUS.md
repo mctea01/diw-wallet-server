@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-20（版本改由 version.properties 管理並升到 0.5、穩定版發佈 workflow 與 Release 頁下載指引、Windows 本機簽章腳本；main 到 PR #44）。
+最後更新：2026-11-21（中繼對超過讀取上限的訊框改報「Room limit」；說明線上查驗轉送要另開 `oid4vp`；main 到 PR #46）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -21,7 +21,7 @@
 
 | 功能 | `features` | 狀態 | 測試 | 備註 |
 |---|---|---|---|---|
-| 中繼 `/zktls/relay/{room}` | `relay`（預設） | 可用 | `ServerTest` | 只轉送端對端加密的資料 |
+| 中繼 `/zktls/relay/{room}` | `relay`（預設） | 可用 | `ServerTest` | 只轉送端對端加密的資料；超過 `relay_max_frame_kb` 很多的訊框（Ktor 讀取上限）也以「Room limit」結束（2026-11-21 修正，之前誤報「Room expired」） |
 | zkTLS 查驗主機與網頁證明回執 | `zktls` | 可用 | `ZkTlsHostTest`（原生 TLSNotary 端對端） | 需要含 `tlsn` 的原生程式庫 |
 | Bonds 年齡查驗主機 `/api/zkp/*` | `bonds-age` | 可用 | `BondsAgeTest` | 預設只轉送；主機驗證需載入 432 MB 驗證金鑰，不適合 1 GB 主機 |
 | 網頁查驗端 `/verify` | `verifier` | 可用 | `VerifierTest` | 以官方查驗端的方言請求卡片，也可查驗 Bonds 自發卡 |
@@ -29,7 +29,7 @@
 | 信任聯盟（OpenID Federation 1.0） | `federation` | 可用 | `FederationTest` | 可當下級，也可當上級 |
 | 本專案 OPRF `/oprf/v1/*` | `oprf` | 可用 | `OprfHostTest` | 需要含 `oprf` 的原生程式庫 |
 | 自己的 zkPassport 證明器 `/zkpassport/v1/jobs` | `zkpassport` | 可用 | `ZkPassportHostTest`、`ZkPassportClientInteropTest` | 需要含 `zkpdf` 的原生程式庫；1 GB 主機可能不夠；本專案 FaceMatch（手機比對並簽署後轉送）的金鑰證明版電路由錢包 release `zkpassport-facematch-v1` 提供（2026-11-15 已發佈） |
-| OpenID4VP 轉送信箱 `/oid4vp/v1/*` | `oid4vp` | 可用 | `Oid4vpMailboxTest`（以錢包 core 的用戶端對路由） | 手機查驗方的線上查驗；只轉存加密回應 |
+| OpenID4VP 轉送信箱 `/oid4vp/v1/*` | `oid4vp` | 可用 | `Oid4vpMailboxTest`（以錢包 core 的用戶端對路由） | 手機查驗方的線上查驗；只轉存加密回應。不含在 `relay` 裡，P5 以前設定的服務端要在 `features` 加上 `oid4vp`（需要 `oid4vp_token_sha256` 或 `zktls_token_sha256`），否則錢包的「經服務端轉送」會被拒（錢包現在會先讀 `/info` 並說明） |
 | 臨時證明器 `diw-server prover` | 指令 | 可用 | `ZkPassportPairingTest` | 內網限定、一次性 QR 配對 |
 | 健康檢查與版本資訊 `/healthz`、`/info` | 固定 | 可用 | `ServerTest`、`ConfigTest` | |
 | 原生程式庫按需載入與 Linux 相容版 | `native_library` | 可用；在 Debian 10、11、12 與 Ubuntu 22.04 容器實測改用相容版並載入 TLSNotary，zkTLS 端對端測試以相容版通過；沒有在不支援 x86-64-v2 的實體 CPU 上驗證 | `ServerTest`、`ZkTlsHostTest` | 相容版沒有 zkPDF 與 zkPassport；完整版需要 glibc 2.38 與 libstdc++ 13 |

@@ -123,6 +123,23 @@ class ServerTest {
         assertEquals(Relay.LIMIT.message, withTimeout(5_000) { a.closeReason.await() }?.message)
     }
 
+    /**
+     * A frame beyond Ktor's own maxFrameSize (the frame limit plus a margin) is refused before the relay reads it; the
+     * room still ends as over its limit, not as expired (seen on a deployed relay with a 200 KB frame).
+     */
+    @Test
+    fun aFrameBeyondTheReaderLimitEndsTheRoomAsALimit() = testApplication {
+        val server = Server(config(RelayLimits(maxFrame = 16)))
+        start(server)
+        val ws = wsClient()
+        val id = room()
+        val a = ws.webSocketSession("/zktls/relay/$id")
+        val b = ws.webSocketSession("/zktls/relay/$id")
+        a.send(Frame.Binary(true, ByteArray(16 + 4096)))
+        assertEquals(Relay.LIMIT.message, withTimeout(5_000) { b.closeReason.await() }?.message)
+        withTimeout(5_000) { while (server.relay!!.size != 0) delay(20) }
+    }
+
     @Test
     fun configFromValues() {
         val c = ServerConfig.from(mapOf("public_url" to "https://diw.example.org/", "relay_max_mb" to "32", "listen_host" to "0.0.0.0"))
