@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-20（版本改由 version.properties 管理並升到 0.5、穩定版發佈 workflow 與 Release 頁下載指引、Windows 本機簽章腳本；main 到 PR #44）。
+最後更新：2026-11-21（原生執行檔建置加入 `--enable-native-access=ALL-UNNAMED`，消除 JNA 載入原生程式庫時的受限方法警告；main 到 PR #44）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -33,7 +33,7 @@
 | 臨時證明器 `diw-server prover` | 指令 | 可用 | `ZkPassportPairingTest` | 內網限定、一次性 QR 配對 |
 | 健康檢查與版本資訊 `/healthz`、`/info` | 固定 | 可用 | `ServerTest`、`ConfigTest` | |
 | 原生程式庫按需載入與 Linux 相容版 | `native_library` | 可用；在 Debian 10、11、12 與 Ubuntu 22.04 容器實測改用相容版並載入 TLSNotary，zkTLS 端對端測試以相容版通過；沒有在不支援 x86-64-v2 的實體 CPU 上驗證 | `ServerTest`、`ZkTlsHostTest` | 相容版沒有 zkPDF 與 zkPassport；完整版需要 glibc 2.38 與 libstdc++ 13 |
-| GraalVM 原生執行檔與 `-native` 映像 | | 實驗；v0.4.1 的 x86_64 版在 ubuntu-26.04 上建置，被標記需要 x86-64-v3，較舊的 CPU 啟動時出現「CPU ISA level is lower than required」（使用者 VPS 實際遇到）。`nativeCompile` 之後的 `checkNativeIsa` 現在擋下這種執行檔 | zkTLS 端對端測試可改對原生執行檔執行；`checkNativeIsa` 以 v0.4.1 執行檔驗證會失敗 | JVM 版仍是預設；workflow 的 x86_64 Linux 原生工作已改用 ubuntu-24.04，CI 建出的原生執行檔可通過檢查 |
+| GraalVM 原生執行檔與 `-native` 映像 | | 實驗；v0.4.1 的 x86_64 版在 ubuntu-26.04 上建置，被標記需要 x86-64-v3，較舊的 CPU 啟動時出現「CPU ISA level is lower than required」（使用者 VPS 實際遇到）。`nativeCompile` 之後的 `checkNativeIsa` 現在擋下這種執行檔。建置參數含 `--enable-native-access=ALL-UNNAMED`，JNA 呼叫 `System.load` 時不再出現 GraalVM 25 的受限方法警告 | zkTLS 端對端測試可改對原生執行檔執行；`checkNativeIsa` 以 v0.4.1 執行檔驗證會失敗 | JVM 版仍是預設；workflow 的 x86_64 Linux 原生工作已改用 ubuntu-24.04，CI 建出的原生執行檔可通過檢查 |
 | zkPDF 證明器（S4） | | 未做 | | 錢包的「送到自架主機產生」目前用錢包 repo 的 `tools/zk-prover-server` |
 
 ## 3. 部署與發佈
