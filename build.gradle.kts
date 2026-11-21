@@ -267,6 +267,8 @@ graalvmNative {
             "--enable-url-protocols=http,https",
             "-Dfile.encoding=UTF-8",
             "-H:IncludeLocales=en,zh",
+            // JNA calls System.load from an unnamed module; JDK 24+ warns at runtime without this.
+            "--enable-native-access=ALL-UNNAMED",
         )
         resources.autodetect()
     }

@@ -194,7 +194,7 @@ java -jar diw-server-<版本>-all.jar prover   # jar 版
 | 相容版 `linux-x86_64-compat` | TLSNotary、OPRF、OpenAC；沒有 zkPDF 與 zkPassport | glibc 2.28 以上（Debian 10、Ubuntu 20.04、RHEL 8），任何 x86_64 CPU，不需 C++ 執行環境 |
 
 - CPU 不支援 x86-64-v2 時不會開啟完整版（否則程序會因非法指令結束），直接改用相容版；glibc 或 libstdc++ 太舊時完整版開不起來，也會改用相容版。
-- `diw-server native-check` 不需設定檔，印出實際載入哪一版、有哪些後端，以及其他版本不能用的原因。`/info` 的 `nativeVariant` 也會顯示載入的版本。
+- `diw-server native-check` 不需設定檔，印出實際載入哪一版、有哪些後端，以及其他版本不能用的原因。`/info` 的 `nativeVariant` 也會顯示載入的版本。它在暫存目錄（/tmp）測試；服務本身把原生程式庫與 JNA 的 libjnidispatch.so 都解到 data_dir/native，所以 /tmp 掛載 noexec 的主機上 native-check 失敗而服務正常是可能的。
 - 另外自建或下載的程式庫可用 `DIW_NATIVE_LIBRARY=/路徑/libdiw_zk.so` 指定，取代內附的版本。
 - 容器映像以 Ubuntu 24.04 為底，主機的 glibc 版本不影響映像內的完整版；CPU 的限制仍然適用。
 - 1 GB 主機適合用相容版跑 zkTLS 查驗主機與 OPRF；zkPassport 證明需要約 1 至 2 GB 記憶體，不建議放在同一台。

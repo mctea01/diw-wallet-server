@@ -12,6 +12,7 @@ import diw.wallet.core.trust.BuiltInAnchors
 import diw.wallet.core.zk.ZkBackend
 import diw.wallet.core.zk.ZkTemplatePack
 import org.multipaz.crypto.EcPublicKey
+import diw.wallet.core.zk.ZkNativeStatus
 import diw.wallet.core.zk.ZkResult
 import diw.wallet.core.zk.native.FileZkAssetStore
 import diw.wallet.core.zk.native.OpenAcAgeNativeVerifier
@@ -69,13 +70,23 @@ private val NATIVE_FEATURES = setOf(ServerConfig.FEATURE_ZKTLS, ServerConfig.FEA
 fun loadNative(config: ServerConfig): Set<ZkBackend> {
     config.nativeLibrary?.let { System.setProperty(ZkNative.LIBRARY_PROPERTY, it.absolutePath) }
     val directory = File(config.dataDir, "native").apply { mkdirs() }
-    val result = ZkNative.load(directory)
+    val result = loadZkNative(directory)
     if (result !is ZkResult.Ok) {
         log.warn("Native library not loaded: {}", ZkNative.loadFailure ?: "self test failed")
         return emptySet()
     }
     log.info("Native library {} ({})", ZkNative.variant ?: "android", result.value.backends.map { it.name.lowercase() }.sorted())
     return result.value.backends
+}
+
+/**
+ * Loads the native library from [directory]. JNA unpacks its own libjnidispatch.so as well, by default to /tmp,
+ * which a hardened host may mount noexec ("Could not initialize class com.sun.jna.NativeLibrary"); it goes to
+ * [directory] instead, which already has to allow running the library, unless jna.tmpdir is set.
+ */
+fun loadZkNative(directory: File): ZkResult<ZkNativeStatus> {
+    if (System.getProperty("jna.tmpdir").isNullOrBlank()) System.setProperty("jna.tmpdir", directory.absolutePath)
+    return ZkNative.load(directory)
 }
 
 /** What the server runs, built once from [config]. */
@@ -436,7 +447,7 @@ private fun command(args: Array<String>): Boolean {
             println("DIW_OPRF_KEY=$key")
             // A fresh owner-only directory, so no other local user can plant the library it loads.
             val directory = java.nio.file.Files.createTempDirectory("diw-server-native").toFile().apply { deleteOnExit() }
-            if (ZkNative.load(directory) is ZkResult.Ok && "oprf" in nativeInfo().features) {
+            if (loadZkNative(directory) is ZkResult.Ok && "oprf" in nativeInfo().features) {
                 println("# public key: " + oprfPublicKey(key))
             } else {
                 System.err.println("diw-server: the native library has no OPRF; the public key shows at /oprf/v1/key once the server runs")
@@ -450,7 +461,7 @@ private fun command(args: Array<String>): Boolean {
             }
             println("host: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
             val directory = java.nio.file.Files.createTempDirectory("diw-server-native").toFile().apply { deleteOnExit() }
-            when (val result = ZkNative.load(directory)) {
+            when (val result = loadZkNative(directory)) {
                 is ZkResult.Ok -> {
                     println("loaded: ${ZkNative.variant ?: "android"} (crate ${result.value.version})")
                     println("backends: ${result.value.backends.map { it.name.lowercase() }.sorted().joinToString(", ").ifEmpty { "none" }}")
