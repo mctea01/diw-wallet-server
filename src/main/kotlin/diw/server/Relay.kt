@@ -6,6 +6,7 @@ import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.FrameTooBigException
 import io.ktor.websocket.close
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.selects.select
@@ -99,13 +100,20 @@ class Relay(private val limits: RelayLimits) {
 
     /** Copies this side's binary frames to [peer] until this side ends ([PEER_LEFT]) or the room reaches a limit. */
     private suspend fun forward(from: DefaultWebSocketServerSession, peer: DefaultWebSocketServerSession, room: Room): CloseReason {
-        for (frame in from.incoming) {
-            if (frame !is Frame.Binary) continue
-            val data = frame.data
-            if (data.size > limits.maxFrame || room.bytes.addAndGet(data.size.toLong()) > limits.maxBytes) return LIMIT
-            peer.send(Frame.Binary(true, data))
+        try {
+            for (frame in from.incoming) {
+                if (frame !is Frame.Binary) continue
+                val data = frame.data
+                if (data.size > limits.maxFrame || room.bytes.addAndGet(data.size.toLong()) > limits.maxBytes) return LIMIT
+                peer.send(Frame.Binary(true, data))
+            }
+        } catch (_: FrameTooBigException) {
+            // Ktor refuses a frame above its maxFrameSize (the room's frame limit plus a margin) before it reaches the
+            // check above; it is the same limit, not an expired room.
+            return LIMIT
         }
-        return PEER_LEFT
+        val reason = from.closeReason.takeIf { it.isCompleted }?.await()
+        return if (reason?.knownReason == CloseReason.Codes.TOO_BIG) LIMIT else PEER_LEFT
     }
 
     companion object {
