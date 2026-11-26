@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-26（Gradle 9.9.2、Ktor 3.6.2、serialization 1.13.0、Bouncy Castle 1.87、GraalVM 建置外掛 0.11.5；錢包子模組更新到工具鏈升級後的 main：AGP 9.5、Compose 1.12、compileSdk 37；main 到 PR #48）。
+最後更新：2026-11-26（Gradle 9.9.2、Ktor 3.6.2、serialization 1.13.0、Bouncy Castle 1.87、GraalVM 建置外掛 0.11.5；錢包子模組更新到錢包 PR #173 合併後的 main（9c05d5d）：AGP 9.5、Compose 1.12、compileSdk 37；main 到 PR #48）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
