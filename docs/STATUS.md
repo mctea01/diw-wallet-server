@@ -12,7 +12,7 @@
 - 里程碑 S1 到 S3（中繼、zkTLS 查驗主機、發行檔與四種部署方式）的程式與自動測試都已完成；S4（zkPDF 證明器）沒有做。
 - S3 之後加入的可選功能都已在 main：Bonds 年齡查驗主機、網頁查驗端、行動自然人憑證簽署、信任聯盟、本專案 OPRF、自己的 zkPassport 證明器、臨時證明器、GraalVM 原生執行檔（實驗）；OpenID4VP 轉送信箱在錢包 P5 的 PR 中（見第 4 節）。
 - 沒有任何一種部署方式有實機驗收紀錄，見第 4 節。
-- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #153 合併後更新：zkPassport 憑證包的 UIDAI 憑證計入憑證樹，2026-11-16 起的憑證包才能通過樹根檢查；揭露日期以 ISO 日期放進查詢結果）。
+- 錢包以 git submodule 釘選在 `wallet/`，釘的是錢包 main 上的 commit（錢包 PR #173 的工具鏈升級：錢包改用 AGP 9.5 與 Gradle 9，服務端引入錢包建置，所以兩邊的 Gradle 要一起升到 9.x）。
 - 原生證明程式庫只在 `zktls`、`oprf`、`zkpassport`、`bonds_age_verify` 啟用時載入。Linux 另附相容版（不含 Barretenberg、glibc 2.28、任何 x86_64 CPU），完整版因 CPU 或 glibc 不能用時自動改用；`diw-server native-check` 顯示結果與原因。
 
 ## 2. 功能狀態
@@ -55,7 +55,7 @@
 未完成：
 
 - S4 zkPDF 證明器。
-- 待合併的相依更新：GraalVM 建置外掛（PR #29）、兩個 GitHub Action 的 digest（PR #31、#32）。
+- 待合併的相依更新：GitHub Action 的版本與 digest（PR #31、#32、#39、#40），屬 workflow 檔，需由使用者合併。
 - 穩定版發佈 workflow 貼上後的第一次實際發佈（尚未執行過）。
 - 完整版 Linux 程式庫改以 Zig 與靜態 libc++ 建置（錢包 `DIW_ZK_LINUX_LIBCXX=1`），讓 zkPassport 等完整功能也能在舊系統使用；預設尚未開啟，見錢包 STATUS。
 - GraalVM 原生執行檔的 glibc 下限（2.34）沒有降低；舊系統請用 JVM 版。
@@ -83,7 +83,9 @@
 
 | 項目 | 版本 |
 |---|---|
-| Kotlin、Ktor（CIO）、coroutines、serialization | 2.4.21、3.6.1、1.11.0、1.12.0 |
+| Kotlin、Ktor（CIO）、coroutines、serialization | 2.4.21、3.6.2、1.11.0、1.13.0 |
+| Gradle、GraalVM 建置外掛 | 9.9.2（錢包的 AGP 9.5 需要 Gradle 9）、0.11.5 |
+| Bouncy Castle | 1.87（與錢包相同） |
 | JDK | 21（jlink 執行環境）；原生執行檔用 GraalVM Community 25 |
 | 錢包 `core` 與原生程式庫 | submodule `wallet/` 釘選的 commit |
 | CI 建置的原生功能 | 映像：`openac,tlsn,oprf,zkpdf,bb5`；臨時證明器：`zkpdf,bb5`；Linux 相容版去掉 `zkpdf,bb5`（保留 `oprf`） |
