@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-26（Gradle 9.9.2、Ktor 3.6.2、serialization 1.13.0、Bouncy Castle 1.87、GraalVM 建置外掛 0.11.5；錢包子模組更新到錢包 PR #176 合併後的 main（94b0952）：AGP 9.5、Compose 1.12、compileSdk 37，以及 Dependabot 告警修補；main 到 PR #48）。
+最後更新：2026-11-27（`tools/windows-sign.ps1` 改為簽署 Windows 原生證明器資料夾內（含子資料夾）所有未簽章的 .exe 與 .dll，簽完確認沒有遺漏；2026-11-26 Gradle 9.9.2、Ktor 3.6.2、serialization 1.13.0、Bouncy Castle 1.87、GraalVM 建置外掛 0.11.5，錢包子模組更新到錢包 main 94b0952；main 到 PR #49）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
@@ -46,7 +46,7 @@
 | Cloudflare Containers | `deploy/cloudflare` | 檔案與文件齊備 |
 | 臨時證明器下載（jar 與各系統的原生版） | `.github/workflows/prover.yml` | workflow 已在 main；推標籤時附加到 Release，也可手動執行取得 Artifact |
 | 穩定版發佈 | `tools/stable-release.sh`、`tools/release-notes.py`、`.github/workflows/stable-release.yml` | 腳本與 workflow 都在 main，尚未實際發佈；換版本線需要 secret `RELEASE_TOKEN` |
-| Windows 程式碼簽章 | `tools/windows-sign.ps1` | 在本機以 YubiKey 簽署 Release 的 Windows 原生證明器與 jar 內的 Windows 原生程式庫並傳回；尚未在 Windows 實際執行過 |
+| Windows 程式碼簽章 | `tools/windows-sign.ps1` | 在本機以 YubiKey 簽署 Release 的 Windows 原生證明器（資料夾內含子資料夾的所有 .exe、.dll，簽完確認沒有遺漏）與 jar 內的 Windows 原生程式庫並傳回；尚未在 Windows 實際執行過 |
 
 所有方式讀同一份 `server.conf`（`deploy/server.conf.example` 由程式產生，測試會比對）。CI 在每次推送與 PR 執行測試，`v*` 標籤時才發佈映像與 Release；Release 內文最上方列出各部署方式該用的檔案，下面是變更。
 

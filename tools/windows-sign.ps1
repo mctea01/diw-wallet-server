@@ -2,8 +2,9 @@
 # that never leaves its token (a YubiKey PIV slot or any smart card the Windows certificate store sees), and uploads
 # them back to the same release under the same names. See docs/fork-setup.md, "Windows code signing".
 #
-# diw-server-<version>-windows-x86_64.zip: diw-server.exe (the GraalVM native prover) is signed and the archive is
-# built again with the same folder. The ZK libraries are compiled into the executable as resources and cannot be
+# diw-server-<version>-windows-x86_64.zip: diw-server.exe (the GraalVM native prover) and every other unsigned .exe
+# and .dll of its folder and the folders below it are signed, none may be left unsigned, and the archive is built
+# again with the same folder. The ZK libraries are compiled into the executable as resources and cannot be
 # signed afterwards; the executable unpacks them only when their SHA-256, pinned inside the signed executable, matches.
 # diw-server-<version>-all.jar: the Windows ZK libraries inside (zk/native/windows-*/diw_zk.dll, diw_bb5.dll) are
 # signed and their .sha256 entries rewritten, since ZkNative checks each library against its entry.
@@ -93,6 +94,32 @@ function Sign-File([string]$path) {
     $script:Signer = $signature.SignerCertificate
 }
 
+# Every .exe and .dll in a folder and all folders below it, by extension (not -Include, whose matching depends on the
+# PowerShell version and the form of the path).
+function Get-Binaries([string]$dir) {
+    @(Get-ChildItem -LiteralPath $dir -Recurse -File -Force | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object FullName)
+}
+
+function Get-Relative([string]$dir, [string]$path) {
+    if ($path.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase)) { $path.Substring($dir.Length).TrimStart('\') } else { $path }
+}
+
+# Signs each .exe and .dll of a folder tree that has no valid signature yet, then fails when any is still unsigned.
+function Sign-Folder([string]$dir, [string]$what) {
+    $all = Get-Binaries $dir
+    $todo = @($all | Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne "Valid" })
+    Write-Host "Signing $($todo.Count) of $($all.Count) .exe and .dll files of $what"
+    foreach ($b in $todo) {
+        Write-Host "  $(Get-Relative $dir $b.FullName)"
+        Sign-File $b.FullName
+    }
+    $left = @(Get-Binaries $dir | Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne "Valid" })
+    if ($left.Count -gt 0) {
+        $left | ForEach-Object { Write-Host "  unsigned: $(Get-Relative $dir $_.FullName)" }
+        throw "$($left.Count) files of $what have no valid signature"
+    }
+}
+
 if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
 $download = Join-Path $WorkDir "download"
 New-Item -ItemType Directory -Path $download | Out-Null
@@ -104,12 +131,13 @@ foreach ($name in @($zipName, $jarName)) {
 }
 $uploads = @()
 
-# The native prover: sign the executable, then the same archive layout again (one folder named like the archive).
+# The native prover: sign the executable and whatever .exe or .dll is with it, then the same archive layout again (one
+# folder named like the archive).
 $unpacked = Join-Path $WorkDir "zip"
 [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $download $zipName), $unpacked)
 $exe = Get-ChildItem $unpacked -Recurse -Filter "diw-server.exe" | Select-Object -First 1
 if (-not $exe) { throw "diw-server.exe not found in $zipName" }
-Sign-File $exe.FullName
+Sign-Folder $exe.Directory.FullName $zipName
 $zip = Join-Path $WorkDir $zipName
 [IO.Compression.ZipFile]::CreateFromDirectory($exe.Directory.FullName, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
 $uploads += $zip
@@ -154,6 +182,10 @@ Write-Host "Replaced in release ${Tag}: $(($uploads | ForEach-Object { [IO.Path]
 if (-not $NoNotes) {
     $body = (& gh release view $Tag --repo $Repo --json body --jq .body | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "gh release view failed" }
+    # Nothing was signed in this run when every file already carried a signature (a rerun): name the signer of the
+    # executable.
+    if (-not $Signer) { $Signer = (Get-AuthenticodeSignature $exe.FullName).SignerCertificate }
+    if (-not $Signer) { throw "diw-server.exe has no signature to name in the release notes" }
     $subject = $Signer.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
     $what = "Windows 原生證明器與 jar 內的 Windows 原生程式庫"
     $line = "$what 已以 $subject 的程式碼簽章憑證簽署（Authenticode）。"
