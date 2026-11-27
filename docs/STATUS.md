@@ -1,6 +1,6 @@
 # 服務端現況
 
-最後更新：2026-11-27（`tools/windows-sign.ps1` 改為簽署 Windows 原生證明器資料夾內（含子資料夾）所有未簽章的 .exe 與 .dll，簽完確認沒有遺漏；main 到 PR #48）。
+最後更新：2026-11-27（`tools/windows-sign.ps1` 改為簽署 Windows 原生證明器資料夾內（含子資料夾）所有未簽章的 .exe 與 .dll，簽完確認沒有遺漏；2026-11-26 Gradle 9.9.2、Ktor 3.6.2、serialization 1.13.0、Bouncy Castle 1.87、GraalVM 建置外掛 0.11.5，錢包子模組更新到錢包 main 94b0952；main 到 PR #49）。
 
 這一頁是服務端狀態的唯一來源：功能做到哪裡、還缺什麼、哪些等實機驗收。README 只寫功能與部署步驟，[DESIGN.md](DESIGN.md) 只寫設計與理由，兩者都不記錄進度。錢包本身的狀態見錢包 repo 的 [docs/STATUS.md](https://github.com/mctea01/my-Bonds-fork-android/blob/main/docs/STATUS.md)。
 
