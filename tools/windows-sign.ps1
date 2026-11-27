@@ -182,6 +182,10 @@ Write-Host "Replaced in release ${Tag}: $(($uploads | ForEach-Object { [IO.Path]
 if (-not $NoNotes) {
     $body = (& gh release view $Tag --repo $Repo --json body --jq .body | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "gh release view failed" }
+    # Nothing was signed in this run when every file already carried a signature (a rerun): name the signer of the
+    # executable.
+    if (-not $Signer) { $Signer = (Get-AuthenticodeSignature $exe.FullName).SignerCertificate }
+    if (-not $Signer) { throw "diw-server.exe has no signature to name in the release notes" }
     $subject = $Signer.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
     $what = "Windows 原生證明器與 jar 內的 Windows 原生程式庫"
     $line = "$what 已以 $subject 的程式碼簽章憑證簽署（Authenticode）。"
